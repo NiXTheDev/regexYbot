@@ -1,4 +1,4 @@
-# RegexBot (grammY)
+# regexYbot
 
 A fast, efficient, and feature-rich Telegram bot built with [grammY](https://github.com/grammyjs/grammy), [Bun](https://bun.sh/), and [SQLite](https://www.sqlite.org/). It provides powerful regex-based substitution (`sed` style) and matching capabilities, with automatic cleanup and robust error handling.
 
