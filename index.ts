@@ -60,7 +60,6 @@ const myCommands = new CommandGroup<MyContext>(); // Use the flavored context ty
 // Define the /privacy command using the CommandGroup
 myCommands.command("privacy", "Show privacy information", async (ctx) => {
   try {
-    cleanupOldEntries();
     await ctx.reply(
       "This bot does not collect or process any user data, apart from a short " +
       "backlog of messages to perform regex substitutions on. These are " +
@@ -79,7 +78,6 @@ myCommands
     { type: "all_private_chats" },
     async (ctx) => {
       try {
-        cleanupOldEntries();
         await ctx.reply("Hello! I am a regex bot. Use s/find/replace/flags to substitute text in messages.");
       } catch (error) {
         console.error("An error occurred in the start command handler:", error);
@@ -236,7 +234,6 @@ function getBotReplyMessageId(targetMessageId: number, chatId: number): number |
 
 bot.on("message", async (ctx) => {
   try {
-    cleanupOldEntries();
 
     if (ctx.message && !ctx.message.text?.startsWith('/')) {
       storeMessageInHistory(ctx.chat.id, ctx.message.message_id, ctx.message.text || ctx.message.caption);
@@ -295,7 +292,6 @@ bot.on("message", async (ctx) => {
 
 bot.on("edited_message", async (ctx) => {
   try {
-    cleanupOldEntries();
 
     if (ctx.editedMessage?.text && SED_PATTERN.test(ctx.editedMessage.text)) {
       const match = ctx.editedMessage.text.match(SED_PATTERN);
@@ -438,6 +434,11 @@ bot.on("edited_message", async (ctx) => {
 myCommands.setCommands(bot).catch((err) => {
     console.error("Failed to set commands with Telegram:", err);
 });
+
+bot.use(async (_, next) => {
+  await next()
+  cleanupOldEntries();
+})
 
 // Use runner.start instead of bot.start
 run(bot)
