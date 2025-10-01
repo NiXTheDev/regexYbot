@@ -1,21 +1,31 @@
 import { Bot, Context } from "grammy";
 // Import grammY runner
 import { run } from "@grammyjs/runner";
+// Import the commands plugin and CommandGroup
+import { commands, CommandGroup, type CommandsFlavor } from "@grammyjs/commands";
 import { Database } from "bun:sqlite";
 import { GrammyError } from "grammy";
 
 // --- Configuration ---
-const BOT_TOKEN = process.env.TOKEN;
-if (!BOT_TOKEN) {
-  console.error("Error: BOT_TOKEN environment variable not set.");
+const token = process.env.TOKEN;
+if (!token) {
+  console.error("Error: token environment variable not set.");
   process.exit(1);
 }
+const base = process.env.BASE_URL || 'https://api.telegram.org';
 const CLEANUP_INTERVAL_MS = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 
 // --- Regex for sed command ---
 const SED_PATTERN = /^s\/((?:\\.|[^\/])+?)\/((?:\\.|[^\/])*?)(\/.*)?$/;
 
-const bot = new Bot(BOT_TOKEN);
+// --- Type Flavouring ---
+// Apply the CommandsFlavor to the Context type
+type MyContext = Context & CommandsFlavor;
+// Use the flavored context type for the bot
+const bot = new Bot<MyContext>(token, { client: { apiRoot: base }});
+
+// --- Install the commands plugin ---
+bot.use(commands());
 
 // --- Database Setup ---
 const db = new Database(":memory:");
@@ -44,6 +54,42 @@ db.run(`CREATE INDEX IF NOT EXISTS idx_bot_replies_timestamp ON bot_replies (tim
 db.run(`CREATE INDEX IF NOT EXISTS idx_message_history_timestamp ON message_history (timestamp)`);
 // --- End Database Setup ---
 
+// --- Command Group Definition ---
+const myCommands = new CommandGroup<MyContext>(); // Use the flavored context type
+
+// Define the /privacy command using the CommandGroup
+myCommands.command("privacy", "Show privacy information", async (ctx) => {
+  try {
+    cleanupOldEntries();
+    await ctx.reply(
+      "This bot does not collect or process any user data, apart from a short " +
+      "backlog of messages to perform regex substitutions on. These are " +
+      "stored in an in-memory sql db for 48h, and can not be accessed by the bot's " +
+      "administrator in any way."
+    );
+  } catch (error) {
+    console.error("An error occurred in the privacy command handler:", error);
+  }
+});
+
+// Define the /start command using the CommandGroup and scope it to private chats
+myCommands
+  .command("start", "Get a greeting message (private chats only)")
+  .addToScope(
+    { type: "all_private_chats" },
+    async (ctx) => {
+      try {
+        cleanupOldEntries();
+        await ctx.reply("Hello! I am a regex bot. Use s/find/replace/flags to substitute text in messages.");
+      } catch (error) {
+        console.error("An error occurred in the start command handler:", error);
+      }
+    }
+  );
+
+// Register the command group with the bot
+bot.use(myCommands);
+
 // --- Helper Functions ---
 
 function cleanupOldEntries() {
@@ -57,10 +103,6 @@ function cleanupOldEntries() {
   if (resultHistory.changes > 0 || resultReplies.changes > 0) {
     console.log(`Cleaned up ${resultHistory.changes} old history entries and ${resultReplies.changes} old reply mappings.`);
   }
-}
-
-function runOpportunisticCleanup() {
-    cleanupOldEntries();
 }
 
 function storeMessageInHistory(chatId: number, messageId: number, text: string | undefined) {
@@ -93,7 +135,7 @@ function storeMessageInHistory(chatId: number, messageId: number, text: string |
   insertStmt.run(chatId, messageId, text ?? "");
 }
 
-async function findTargetMessage(ctx: Context, match: RegExpMatchArray, excludeMessageId?: number) {
+async function findTargetMessage(ctx: MyContext, match: RegExpMatchArray, excludeMessageId?: number) {
   let targetMsgText: string | undefined;
   let targetMsgId: number | undefined;
 
@@ -135,6 +177,7 @@ async function findTargetMessage(ctx: Context, match: RegExpMatchArray, excludeM
   }
   return { targetMsgText, targetMsgId };
 }
+
 
 function getRegexFlags(flagsMatch: string | undefined): string {
   if (!flagsMatch) return '';
@@ -193,7 +236,7 @@ function getBotReplyMessageId(targetMessageId: number, chatId: number): number |
 
 bot.on("message", async (ctx) => {
   try {
-    runOpportunisticCleanup();
+    cleanupOldEntries();
 
     if (ctx.message && !ctx.message.text?.startsWith('/')) {
       storeMessageInHistory(ctx.chat.id, ctx.message.message_id, ctx.message.text || ctx.message.caption);
@@ -202,7 +245,7 @@ bot.on("message", async (ctx) => {
     if (ctx.message?.text && SED_PATTERN.test(ctx.message.text)) {
       const match = ctx.message.text.match(SED_PATTERN);
       if (match) {
-        const { targetMsgText, targetMsgId } = await findTargetMessage(ctx, match);
+        const { targetMsgText, targetMsgId } = await findTargetMessage(ctx, match, undefined); // Pass MyContext and potentially excludeId if needed in future
 
         // Check if the target message text itself is an 's/.../.../' command
         if (targetMsgText && targetMsgId && SED_PATTERN.test(targetMsgText)) {
@@ -252,11 +295,12 @@ bot.on("message", async (ctx) => {
 
 bot.on("edited_message", async (ctx) => {
   try {
-    runOpportunisticCleanup();
+    cleanupOldEntries();
 
     if (ctx.editedMessage?.text && SED_PATTERN.test(ctx.editedMessage.text)) {
       const match = ctx.editedMessage.text.match(SED_PATTERN);
       if (match) {
+        // Pass the edited message ID to exclude it from history lookup during edits
         const { targetMsgText, targetMsgId } = await findTargetMessage(ctx, match, ctx.editedMessage.message_id);
 
         // Check if the target message text itself is an 's/.../.../' command
@@ -389,30 +433,14 @@ bot.on("edited_message", async (ctx) => {
   }
 });
 
-bot.command("privacy", async (ctx) => { // Made async
-  try {
-    runOpportunisticCleanup();
-    await ctx.reply( // Use await for consistency, though not strictly needed here
-      "This bot does not collect or process any user data, apart from a short " +
-      "backlog of messages to perform regex substitutions on. These are " +
-      "stored in an in-memory sql db for 48h, and can not be accessed by the bot's " +
-      "administrator in any way."
-    );
-  } catch (error) {
-    console.error("An error occurred in the privacy command handler:", error);
-  }
+// Register the /privacy and /start commands with Telegram's UI using the CommandGroup
+// This should happen *after* the CommandGroup is defined but *before* the bot starts.
+myCommands.setCommands(bot).catch((err) => {
+    console.error("Failed to set commands with Telegram:", err);
 });
 
 // Use runner.start instead of bot.start
-run(bot, {
-  // Optional: Configure runner options if needed
-  // fetch: { // Example: pass options to the underlying fetch call
-  //   timeout: 30000, // 30 seconds
-  // },
-  // runner: { // Example: configure the runner itself
-  //   maxConcurrentUpdates: 100, // Default is usually sufficient
-  // }
-})
+run(bot)
 console.log("Bot started using runner!");
 // Note: The runner handles startup and connection management.
 // The original `bot.start({...})` call is replaced by `run(bot, {...})`.
