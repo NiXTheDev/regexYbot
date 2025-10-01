@@ -1,0 +1,14 @@
+{
+  "name": "grammy-sed-bot",
+  "type": "module",
+  "dependencies": {
+    "@grammyjs/auto-retry": "latest",
+    "@grammyjs/hydrate": "latest",
+    "@grammyjs/runner": "latest",
+    "grammy": "latest"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  }
+}
