@@ -26,6 +26,7 @@ A fast, efficient, and feature-rich Telegram bot built with [grammY](https://git
 ## Environment Variables
 
 * `TOKEN`: Your Telegram bot token (required).
+* `BASE_URL`[Optional]: Base url for telegram bot api, if you're running a local server
 
 ## Setup & Run
 
