@@ -272,6 +272,18 @@ function getBotReplyMessageId(
 	return row?.bot_message_id;
 }
 
+// Function to escape MarkdownV2 special characters in a string
+function escapeMarkdownV2(text: string): string {
+	// Telegram MarkdownV2 requires escaping these characters:
+	// _, *, [, ], (, ), ~, ` (backtick), >, #, +, -, =, |, {, }, ., !
+	// The backslash itself also needs escaping if it's not already part of an escape sequence.
+	// This regex replaces each special character with a backslash followed by the character.
+	// Standard list of chars to escape: _ * [ ] ( ) ~ ` > # + - = | { } . !
+	// Regex: /([_*\[\]()~`>#+\-=|{}.!])/g
+	// Replace with: \\$1
+	return text.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, "\\$1");
+}
+
 // --- Bot Handlers ---
 
 bot.on("message", async (ctx) => {
@@ -368,44 +380,27 @@ bot.on("message", async (ctx) => {
 						return;
 					}
 
-					// Build the final message
-					let finalMessage = currentText; // The result of the last successful command
+					// Build the final message: just the result of the chain
+					let finalMessage = currentText;
 
-					// Build the summary/intermediaries part at the end
-					if (allResults.length > 1) {
-						// Only show intermediaries if there was more than one command
-						// Start building the summary
-						let summary = "\n\n";
-
-						// Add the initial state
-						summary += `<b>Initial:</b> <pre>${targetMsgText}</pre>\n`;
-
-						// Add each step's result
-						for (let i = 0; i < allResults.length; i++) {
-							summary += `<b>After '${allResults[i].pattern}':</b> <pre>${allResults[i].result}</pre>\n`;
-						}
-
-						// Check if adding the summary keeps the message under the limit
-						if ((finalMessage + summary).length <= MAX_MESSAGE_LENGTH) {
-							finalMessage += summary;
-						} else {
-							// If it's too long, just show the final result and a note
-							finalMessage += `\n\n(Chain summary omitted due to length)`;
-						}
-					} else if (allResults.length === 1 && !allResults[0].matched) {
-						// If there was only one command and it didn't match
-						finalMessage = "Substitution pattern did not match.";
+					// --- NO INTERMEDIARY SUMMARY ---
+					// --- TRIM TO MAX LENGTH ---
+					if (finalMessage.length > MAX_MESSAGE_LENGTH) {
+						// Truncate the final result if it's too long
+						finalMessage = finalMessage.slice(0, MAX_MESSAGE_LENGTH);
 					}
-					// If there was one command and it *did* match, finalMessage is already the result.
 
 					// Send the final formatted message
+					// Note: Using parse_mode: "MarkdownV2" for potential markdown chars in the final result
+					// Escape the final message text before sending.
+					finalMessage = escapeMarkdownV2(finalMessage);
 					try {
 						const sentMsg = await ctx.api.sendMessage(
 							ctx.chat.id,
 							finalMessage,
 							{
 								reply_parameters: { message_id: targetMsgId },
-								parse_mode: "HTML", // Enable HTML formatting for the summary
+								parse_mode: "MarkdownV2",
 							},
 						);
 						storeBotReplyMapping(targetMsgId, ctx.chat.id, sentMsg.message_id);
@@ -523,6 +518,7 @@ bot.on("edited_message", async (ctx) => {
 									ctx.chat.id,
 									previousBotReplyId,
 									"(Substitution chain timed out)",
+									{ parse_mode: "MarkdownV2" }, // Ensure parse mode is set if the original had it
 								);
 								storeBotReplyMapping(
 									targetMsgId,
@@ -546,6 +542,7 @@ bot.on("edited_message", async (ctx) => {
 											"(Substitution chain timed out)",
 											{
 												reply_parameters: { message_id: targetMsgId },
+												parse_mode: "MarkdownV2",
 											},
 										);
 										storeBotReplyMapping(
@@ -568,6 +565,7 @@ bot.on("edited_message", async (ctx) => {
 									"(Substitution chain timed out)",
 									{
 										reply_parameters: { message_id: targetMsgId },
+										parse_mode: "MarkdownV2",
 									},
 								);
 								storeBotReplyMapping(
@@ -597,6 +595,7 @@ bot.on("edited_message", async (ctx) => {
 									ctx.chat.id,
 									previousBotReplyId,
 									"(No match for edited pattern chain)",
+									{ parse_mode: "MarkdownV2" }, // Ensure parse mode is set if the original had it
 								);
 								storeBotReplyMapping(
 									targetMsgId,
@@ -623,6 +622,7 @@ bot.on("edited_message", async (ctx) => {
 											"(No match for edited pattern chain)",
 											{
 												reply_parameters: { message_id: targetMsgId },
+												parse_mode: "MarkdownV2",
 											},
 										);
 										storeBotReplyMapping(
@@ -645,6 +645,7 @@ bot.on("edited_message", async (ctx) => {
 									"(No match for edited pattern chain)",
 									{
 										reply_parameters: { message_id: targetMsgId },
+										parse_mode: "MarkdownV2",
 									},
 								);
 								storeBotReplyMapping(
@@ -662,27 +663,14 @@ bot.on("edited_message", async (ctx) => {
 						return; // Stop further processing after no match
 					}
 
-					// Build the final message for the edit
+					// Build the final message for the edit: just the result of the chain
 					let finalMessage = currentText;
 
-					if (allResults.length > 1) {
-						let summary = "\n\n";
-
-						// Add the initial state
-						summary += `<b>Initial:</b> <pre>${targetMsgText}</pre>\n`;
-
-						// Add each step's result
-						for (let i = 0; i < allResults.length; i++) {
-							summary += `<b>After '${allResults[i].pattern}':</b> <pre>${allResults[i].result}</pre>\n`;
-						}
-
-						if ((finalMessage + summary).length <= MAX_MESSAGE_LENGTH) {
-							finalMessage += summary;
-						} else {
-							finalMessage += `\n\n(Chain summary omitted due to length)`;
-						}
-					} else if (allResults.length === 1 && !allResults[0].matched) {
-						finalMessage = "(No match for edited pattern)";
+					// --- NO INTERMEDIARY SUMMARY ---
+					// --- TRIM TO MAX LENGTH ---
+					if (finalMessage.length > MAX_MESSAGE_LENGTH) {
+						// Truncate the final result if it's too long
+						finalMessage = finalMessage.slice(0, MAX_MESSAGE_LENGTH);
 					}
 
 					// --- Handle editing or sending the new message ---
@@ -692,10 +680,14 @@ bot.on("edited_message", async (ctx) => {
 					);
 					if (previousBotReplyId) {
 						try {
+							// Edit the message, ensuring parse_mode is MarkdownV2
+							// Escape the final message text before sending.
+							finalMessage = escapeMarkdownV2(finalMessage);
 							await ctx.api.editMessageText(
 								ctx.chat.id,
 								previousBotReplyId,
 								finalMessage,
+								{ parse_mode: "MarkdownV2" },
 							);
 							storeBotReplyMapping(
 								targetMsgId,
@@ -722,9 +714,11 @@ bot.on("edited_message", async (ctx) => {
 								try {
 									const newReplyMsg = await ctx.api.sendMessage(
 										ctx.chat.id,
-										finalMessage,
+										// Escape the final message text before sending.
+										escapeMarkdownV2(finalMessage),
 										{
 											reply_parameters: { message_id: targetMsgId },
+											parse_mode: "MarkdownV2", // Ensure parse mode is set
 										},
 									);
 									storeBotReplyMapping(
@@ -747,9 +741,11 @@ bot.on("edited_message", async (ctx) => {
 						try {
 							const newReplyMsg = await ctx.api.sendMessage(
 								ctx.chat.id,
-								finalMessage,
+								// Escape the final message text before sending.
+								escapeMarkdownV2(finalMessage),
 								{
 									reply_parameters: { message_id: targetMsgId },
+									parse_mode: "MarkdownV2", // Ensure parse mode is set
 								},
 							);
 							storeBotReplyMapping(
