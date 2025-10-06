@@ -375,7 +375,7 @@ bot.on("message", async (ctx) => {
 					if (allResults.length > 1) {
 						// Only show intermediaries if there was more than one command
 						// Start building the summary
-						let summary = "\n\n<blockquote expandable>";
+						let summary = "\n\n";
 
 						// Add the initial state
 						summary += `<b>Initial:</b> <pre>${targetMsgText}</pre>\n`;
@@ -384,8 +384,6 @@ bot.on("message", async (ctx) => {
 						for (let i = 0; i < allResults.length; i++) {
 							summary += `<b>After '${allResults[i].pattern}':</b> <pre>${allResults[i].result}</pre>\n`;
 						}
-
-						summary += "</blockquote>";
 
 						// Check if adding the summary keeps the message under the limit
 						if ((finalMessage + summary).length <= MAX_MESSAGE_LENGTH) {
@@ -668,7 +666,7 @@ bot.on("edited_message", async (ctx) => {
 					let finalMessage = currentText;
 
 					if (allResults.length > 1) {
-						let summary = "\n\n<blockquote expandable>";
+						let summary = "\n\n";
 
 						// Add the initial state
 						summary += `<b>Initial:</b> <pre>${targetMsgText}</pre>\n`;
@@ -677,8 +675,6 @@ bot.on("edited_message", async (ctx) => {
 						for (let i = 0; i < allResults.length; i++) {
 							summary += `<b>After '${allResults[i].pattern}':</b> <pre>${allResults[i].result}</pre>\n`;
 						}
-
-						summary += "</blockquote>";
 
 						if ((finalMessage + summary).length <= MAX_MESSAGE_LENGTH) {
 							finalMessage += summary;
