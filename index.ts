@@ -371,20 +371,21 @@ bot.on("message", async (ctx) => {
 					// Build the final message
 					let finalMessage = currentText; // The result of the last successful command
 
-					// Build the summary/intermediaries part
+					// Build the summary/intermediaries part at the end
 					if (allResults.length > 1) {
 						// Only show intermediaries if there was more than one command
 						// Start building the summary
-						let summary = "\n\n";
+						let summary = "\n\n<blockquote expandable>";
+
+						// Add the initial state
+						summary += `<b>Initial:</b> <pre>${targetMsgText}</pre>\n`;
+
+						// Add each step's result
 						for (let i = 0; i < allResults.length; i++) {
-							summary += `<b>Step ${i + 1}:</b> <code>${allResults[i].pattern}</code>\n`;
-							if (allResults[i].matched) {
-								// Only show the result if it was a match
-								summary += `-> <pre>${allResults[i].result}</pre>\n`;
-							} else {
-								summary += `-> (No match)\n`;
-							}
+							summary += `<b>After '${allResults[i].pattern}':</b> <pre>${allResults[i].result}</pre>\n`;
 						}
+
+						summary += "</blockquote>";
 
 						// Check if adding the summary keeps the message under the limit
 						if ((finalMessage + summary).length <= MAX_MESSAGE_LENGTH) {
@@ -667,15 +668,17 @@ bot.on("edited_message", async (ctx) => {
 					let finalMessage = currentText;
 
 					if (allResults.length > 1) {
-						let summary = "\n\n";
+						let summary = "\n\n<blockquote expandable>";
+
+						// Add the initial state
+						summary += `<b>Initial:</b> <pre>${targetMsgText}</pre>\n`;
+
+						// Add each step's result
 						for (let i = 0; i < allResults.length; i++) {
-							summary += `<b>Step ${i + 1}:</b> <code>${allResults[i].pattern}</code>\n`;
-							if (allResults[i].matched) {
-								summary += `-> <pre>${allResults[i].result}</pre>\n`;
-							} else {
-								summary += `-> (No match)\n`;
-							}
+							summary += `<b>After '${allResults[i].pattern}':</b> <pre>${allResults[i].result}</pre>\n`;
 						}
+
+						summary += "</blockquote>";
 
 						if ((finalMessage + summary).length <= MAX_MESSAGE_LENGTH) {
 							finalMessage += summary;
