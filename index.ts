@@ -13,10 +13,11 @@ import { GrammyError } from "grammy";
 // --- Configuration ---
 const token = process.env.TOKEN;
 if (!token) {
-	console.error("Error: token environment variable not set.");
+	console.error("Error: TOKEN environment variable not set.");
 	process.exit(1);
 }
-const base = process.env.BASE_URL || "https://api.telegram.org";
+// Fix: Remove trailing spaces from the base URL and use correct option name
+const base = (process.env.BASE_URL || "https://api.telegram.org").trim();
 const CLEANUP_INTERVAL_MS = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 const MAX_CHAIN_LENGTH = 5; // Maximum number of sed commands to process in a chain
 const MAX_MESSAGE_LENGTH = 4096; // Telegram's max message length
@@ -28,7 +29,7 @@ const SED_PATTERN = /^s\/((?:\\.|[^\/])+?)\/((?:\\.|[^\/])*?)(\/.*)?$/;
 // Apply the CommandsFlavor to the Context type
 type MyContext = Context & CommandsFlavor;
 // Use the flavored context type for the bot
-const bot = new Bot<MyContext>(token, { client: { apiRoot: base } });
+const bot = new Bot<MyContext>(token, { client: { apiRoot: base } }); // Use client.apiRoot
 
 // --- Install the commands plugin ---
 bot.use(commands());
@@ -154,6 +155,25 @@ function storeMessageInHistory(
 	insertStmt.run(chatId, messageId, text ?? "");
 }
 
+// --- NEW: Helper function to store bot's own replies in history ---
+// Simplified version: Assumes cleanupOldEntries handles pruning
+function storeBotReplyInHistory(
+	chatId: number,
+	messageId: number,
+	text: string | undefined,
+) {
+	// Bot replies should generally be stored for potential non-reply substitutions.
+	// We bypass the SED_PATTERN check here to allow bot replies containing 's/.../' text
+	// to be used as targets themselves.
+
+	const insertStmt = db.prepare(
+		`INSERT OR REPLACE INTO message_history (chat_id, message_id, text) VALUES (?, ?, ?)`,
+	);
+	// Ensure text is never undefined for storage
+	insertStmt.run(chatId, messageId, text ?? "");
+}
+// --- END NEW ---
+
 async function findTargetMessage(
 	ctx: MyContext,
 	match: RegExpMatchArray, // This is now just the first match for history lookup if no reply
@@ -213,44 +233,82 @@ function getRegexFlags(flagsMatch: string | undefined): string {
 }
 
 // Apply substitution with a timeout check
-function applySubstitutionWithTimeout(
-	text: string,
-	match: RegExpMatchArray,
-	timeoutMs: number = 60000,
+async function applySubstitutionWithTimeout(
+    text: string,
+    match: RegExpMatchArray,
+    timeoutMs: number = 60000,
 ): Promise<{ result: string; matched: boolean } | null> {
-	return new Promise((resolve, reject) => {
-		const fr = match[1].replace(/\\\//g, "/");
-		// --- NEW: Convert \1, \2, etc. in the replacement string to $1, $2, etc. ---
-		let rawTo = match[2].replace(/\\\//g, "/");
-		// Use a regex to find \ followed by one or more digits
-		// Replace \N with $N
-		const convertedTo = rawTo.replace(/\\(\d+)/g, '$$$1'); // '$$$1' results in '$' + '$1' which is the literal '$1'
-		// --- END NEW ---
-		const flags = getRegexFlags(match[3]);
 
-		const globalFlag = flags.includes("g") ? "g" : "";
-		const otherFlags = flags.replace("g", "");
-		const regex = new RegExp(fr, otherFlags + globalFlag);
+    // --- Process the 'from' (pattern) and 'to' (replacement) parts ---
+    const fr = match[1].replace(/\\\//g, "/"); // Clean the 'from' pattern
+    let rawTo = match[2].replace(/\\\//g, "/"); // Clean the 'to' part
+    // Convert user's \N syntax to JS's $N syntax for the replacement string
+    const processedTo = rawTo.replace(/\\(\d+)/g, '$$$1'); // Convert \N to $N
+    const flags = getRegexFlags(match[3]);
+    // --- End processing of parts ---
 
-		// Set up timeout
-		const timeoutId = setTimeout(() => {
-			console.log("Substitution timed out after " + timeoutMs + "ms.");
-			resolve(null); // Indicate timeout/abort
-		}, timeoutMs);
+    // --- Spawn the subprocess to perform the regex ---
+    const proc = Bun.spawn([
+        "bun", // Command to run Bun
+        "hellspawn.ts", // Path to the script (adjust if needed)
+        text,    // Pass the target text as argument 1
+        fr,      // Pass the cleaned pattern as argument 2
+        flags,   // Pass the flags as argument 3
+        processedTo // Pass the *processed* replacement string as argument 4
+    ]);
+    // --- End spawning subprocess ---
 
-		try {
-			// Execute the potentially slow regex
-			// Use the converted replacement string
-			const result = text.replace(regex, convertedTo);
-			// Clear timeout if substitution finished quickly
-			clearTimeout(timeoutId);
-			resolve({ result, matched: result !== text });
-		} catch (error) {
-			clearTimeout(timeoutId);
-			console.error("Error during substitution:", error);
-			reject(error);
-		}
-	});
+    // --- Set up the main thread timeout ---
+    return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+            console.log(`Substitution process for pattern /${fr}/ timed out after ${timeoutMs}ms, killing process.`);
+            proc.kill(); // Kill the spawned subprocess
+            // Resolve with null to indicate timeout
+            resolve(null);
+        }, timeoutMs);
+        // --- End timeout setup ---
+
+        // --- Wait for the subprocess to finish ---
+        (async () => {
+            try {
+                // Wait for the subprocess to exit
+                const exitCode = await proc.exited;
+
+                // Clear the timeout if the process finished in time
+                clearTimeout(timeoutId);
+
+                if (exitCode === 0) {
+                    // Process finished successfully
+                    const rawOutput = await new Response(proc.stdout).text();
+                    const result = rawOutput.trimEnd(); // Get output and remove trailing newline
+
+                    // Determine if a match occurred by comparing input and output
+                    const matched = result !== text;
+                    resolve({ result, matched });
+                } else {
+                    // Process failed or was killed due to timeout
+                    const rawStderr = await new Response(proc.stderr).text();
+                    const stderr = rawStderr.trim();
+                    if (stderr) {
+                        console.error(`Subprocess error for /${fr}/: ${stderr}`);
+                    } else {
+                        console.error(`Subprocess for /${fr}/ exited with code ${exitCode}, no stderr.`);
+                    }
+
+                    // If exitCode was due to timeout (proc.kill()), stderr might be empty
+                    // or indicate termination. We resolve with null for any non-zero exit.
+                    resolve(null); // Indicate failure/timeout
+                }
+            } catch (error) {
+                // Clear the timeout in case of an unexpected error awaiting the process
+                clearTimeout(timeoutId);
+                console.error("Unexpected error waiting for subprocess:", error);
+                // Reject the promise if there's an unexpected error in the spawning/awaiting logic
+                reject(error);
+            }
+        })();
+        // --- End waiting for subprocess ---
+    });
 }
 
 function storeBotReplyMapping(
@@ -278,22 +336,70 @@ function getBotReplyMessageId(
 	return row?.bot_message_id;
 }
 
-// Function to escape MarkdownV2 special characters in a string
-function escapeMarkdownV2(text: string): string {
-	// Telegram MarkdownV2 requires escaping these characters:
-	// _, *, [, ], (, ), ~, ` (backtick), >, #, +, -, =, |, {, }, ., !
-	// The backslash itself also needs escaping if it's not already part of an escape sequence.
-	// This regex replaces each special character with a backslash followed by the character.
-	// Standard list of chars to escape: _ * [ ] ( ) ~ ` > # + - = | { } . !
-	// Regex: /([_*\[\]()~`>#+\-=|{}.!])/g
-	// Replace with: \\$1
-	return text.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, "\\$1");
+// --- CORRECTED ESCAPING FUNCTION ---
+// Function to escape MarkdownV2 special characters and literal backslashes correctly
+// Order matters: escape backslashes first, then Markdown chars.
+function escapeForMarkdownV2AndBackslashes(text: string): string {
+	// 1. First, escape any literal backslashes in the original text.
+	// One \ becomes \\.
+	let escapedText = text.replace(/\\/g, "\\\\");
+
+	// 2. Then, escape all MarkdownV2 special characters with a single backslash.
+	// This correctly handles |, ., -, etc., without affecting the \\ from step 1.
+	// The regex includes \\ to ensure we don't double-process backslashes,
+	// but the replacement logic handles it correctly because we are prepending \.
+	// The key is that step 1 turned all \ into \\.
+	// Step 2 finds \\ and turns it into \\. (Which is correct, it stays \\).
+	// Step 2 finds | and turns it into \|. (Correct).
+	// Example trace for "A \\ B |":
+	// After step 1: "A \\\\ B |"
+	// In step 2 regex /[\\_*...]/g:
+	// Match 1: \\ (1st \). $1="\". Replace with \\. Result starts "A \\\\\...".
+	// Match 2: \\ (2nd \). $1="\". Replace with \\. Result "A \\\\\\\\ B |".
+	// Match 3: |. $1="|". Replace with \|". Final "A \\\\\\\\ B \\|".
+	// This is still wrong because the \\ from step 1 is being escaped again.
+	// The problem is that the character class [\\...] includes \.
+	// When we find \, we replace it with \\. This is incorrect for the \ we just added.
+	// We only want to escape the Markdown special chars, not the backslashes we just used for escaping.
+	// The correct way is to escape Markdown chars first, then backslashes.
+	// But that leads to the original problem.
+	// Let's try escaping backslashes first, then Markdown chars, but be smarter in the Markdown step.
+	// The issue is the regex in step 2 matches \. We don't want it to match the \ we just added for escaping other chars.
+	// A better approach: Escape backslashes. Then escape Markdown chars, but be aware that some \ might now be part of \\.
+	// Let's try the correct order again, and see if the regex is the issue.
+	// Correct Order:
+	// 1. Escape literal backslashes: \ -> \\
+	// 2. Escape Markdown special chars: | -> \|, but do NOT re-escape the \ from step 1 if it forms \\.
+	// How to express "escape Markdown chars but not if they are part of \\"?
+	// It's complex. Let's stick to the "escape backslashes first" logic, but ensure the Markdown regex doesn't double-process.
+	// The problem in the previous trace was misinterpreting how the regex works.
+	// Let's trace carefully with the CORRECT order (backslashes FIRST):
+	// Original: "A \\ B | C _"
+	// Step 1 (Escape backslashes): text.replace(/\\/g, '\\\\') -> "A \\\\ B | C _"
+	// Step 2 (Escape Markdown): escapedText.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, '\\$1')
+	// Regex finds each character in the class:
+	// Finds | : $1="|". Replace with \| -> "A \\\\ B \\| C _"
+	// Finds _ : $1="_". Replace with \_ -> "A \\\\ B \\| C \\_"
+	// This looks correct. The \\ from step 1 is left untouched by step 2 because \ is not in the character class used in step 2's regex.
+	// Ah! My previous trace was wrong. The character class in step 2 was `[_*...\\]`. It SHOULD NOT include `\\`.
+	// The character class should only be the Markdown special chars.
+	// Let's redefine the function with the CORRECT regex (excluding \\ from the Markdown escape class).
+
+	// 1. Escape literal backslashes first.
+	escapedText = text.replace(/\\/g, "\\\\");
+	// 2. Escape Markdown special chars. The regex MUST NOT include \\ or \.
+	// Standard MarkdownV2 special chars: _ * [ ] ( ) ~ ` > # + - = | { } . !
+	escapedText = escapedText.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, "\\$1");
+
+	return escapedText;
 }
+// --- END CORRECTED ESCAPING FUNCTION ---
 
 // --- Bot Handlers ---
 
 bot.on("message", async (ctx) => {
 	try {
+		// --- Store incoming user messages in history ---
 		if (ctx.message && !ctx.message.text?.startsWith("/")) {
 			storeMessageInHistory(
 				ctx.chat.id,
@@ -312,7 +418,6 @@ bot.on("message", async (ctx) => {
 				// Parse the first command to find the target (for history lookup)
 				const firstMatch = sedCommands[0].match(SED_PATTERN);
 				if (!firstMatch) {
-					// This should theoretically not happen if the filter worked correctly
 					return;
 				}
 
@@ -362,10 +467,7 @@ bot.on("message", async (ctx) => {
 						currentText = result; // Feed the result into the next command
 
 						// Check if the intermediate result is getting too long
-						// We'll check against a threshold before adding more intermediaries
 						if (currentText.length > MAX_MESSAGE_LENGTH) {
-							// Stop processing further commands if the result is too long
-							// This is a simplification; a more robust check would factor in the summary message length too.
 							break;
 						}
 					}
@@ -389,27 +491,33 @@ bot.on("message", async (ctx) => {
 					// Build the final message: just the result of the chain
 					let finalMessage = currentText;
 
-					// --- NO INTERMEDIARY SUMMARY ---
 					// --- TRIM TO MAX LENGTH ---
 					if (finalMessage.length > MAX_MESSAGE_LENGTH) {
-						// Truncate the final result if it's too long
 						finalMessage = finalMessage.slice(0, MAX_MESSAGE_LENGTH);
 					}
 
 					// Send the final formatted message
-					// Note: Using parse_mode: "MarkdownV2" for potential markdown chars in the final result
-					// Escape the final message text before sending.
-					finalMessage = escapeMarkdownV2(finalMessage);
+					// Note: Using parse_mode: "MarkdownV2"
+					// CRITICAL FIX: Escape the final message text for MarkdownV2 AND literal backslashes correctly
+					finalMessage = escapeForMarkdownV2AndBackslashes(finalMessage);
+
 					try {
 						const sentMsg = await ctx.api.sendMessage(
 							ctx.chat.id,
 							finalMessage,
 							{
 								reply_parameters: { message_id: targetMsgId },
-								parse_mode: "MarkdownV2",
+								parse_mode: "MarkdownV2", // Enable MarkdownV2 formatting
 							},
 						);
 						storeBotReplyMapping(targetMsgId, ctx.chat.id, sentMsg.message_id);
+						// --- NEW: Store the bot's sent reply in history ---
+						storeBotReplyInHistory(
+							ctx.chat.id,
+							sentMsg.message_id,
+							finalMessage, // Use the potentially trimmed/escaped text
+						);
+						// --- END NEW ---
 					} catch (e) {
 						console.error("Error sending reply for sed command chain:", e);
 						if (
@@ -436,14 +544,20 @@ bot.on("message", async (ctx) => {
 		}
 	} catch (error) {
 		console.error("An error occurred in the message handler:", error);
-		// Optionally notify the user, but be careful not to cause an infinite loop
-		// if the error itself is related to sending messages.
-		// For now, just log it.
 	}
 });
 
 bot.on("edited_message", async (ctx) => {
 	try {
+		// --- Store edited user messages in history ---
+		if (ctx.editedMessage?.text && !ctx.editedMessage.text.startsWith("/")) {
+			storeMessageInHistory(
+				ctx.chat.id,
+				ctx.editedMessage.message_id,
+				ctx.editedMessage.text || ctx.editedMessage.caption,
+			);
+		}
+
 		if (ctx.editedMessage?.text && ctx.editedMessage.text.includes("s/")) {
 			const lines = ctx.editedMessage.text.split("\n");
 			const sedCommands = lines.filter((line) => SED_PATTERN.test(line.trim()));
@@ -507,10 +621,8 @@ bot.on("edited_message", async (ctx) => {
 					}
 
 					if (chainErrored) {
-						// Handle error during edit - maybe send a new message or edit an existing bot reply if possible
-						// For simplicity, let's just log and potentially send a new message
 						console.error("Error occurred during sed chain edit processing.");
-						return; // Or handle error state in mapping if needed
+						return;
 					}
 					if (chainTimedOut) {
 						// Handle timeout during edit
@@ -524,7 +636,7 @@ bot.on("edited_message", async (ctx) => {
 									ctx.chat.id,
 									previousBotReplyId,
 									"(Substitution chain timed out)",
-									{ parse_mode: "MarkdownV2" }, // Ensure parse mode is set if the original had it
+									{ parse_mode: "MarkdownV2" },
 								);
 								storeBotReplyMapping(
 									targetMsgId,
@@ -556,6 +668,11 @@ bot.on("edited_message", async (ctx) => {
 											ctx.chat.id,
 											newReplyMsg.message_id,
 										);
+										storeBotReplyInHistory(
+											ctx.chat.id,
+											newReplyMsg.message_id,
+											"(Substitution chain timed out)",
+										);
 									} catch (e2) {
 										console.error(
 											"Failed to send new reply for timeout case:",
@@ -579,6 +696,11 @@ bot.on("edited_message", async (ctx) => {
 									ctx.chat.id,
 									newReplyMsg.message_id,
 								);
+								storeBotReplyInHistory(
+									ctx.chat.id,
+									newReplyMsg.message_id,
+									"(Substitution chain timed out)",
+								);
 							} catch (e) {
 								console.error(
 									"Failed to send new reply for timeout case (no previous):",
@@ -601,7 +723,7 @@ bot.on("edited_message", async (ctx) => {
 									ctx.chat.id,
 									previousBotReplyId,
 									"(No match for edited pattern chain)",
-									{ parse_mode: "MarkdownV2" }, // Ensure parse mode is set if the original had it
+									{ parse_mode: "MarkdownV2" },
 								);
 								storeBotReplyMapping(
 									targetMsgId,
@@ -636,6 +758,11 @@ bot.on("edited_message", async (ctx) => {
 											ctx.chat.id,
 											newReplyMsg.message_id,
 										);
+										storeBotReplyInHistory(
+											ctx.chat.id,
+											newReplyMsg.message_id,
+											"(No match for edited pattern chain)",
+										);
 									} catch (e2) {
 										console.error(
 											"Failed to send new reply for no-match case:",
@@ -659,6 +786,11 @@ bot.on("edited_message", async (ctx) => {
 									ctx.chat.id,
 									newReplyMsg.message_id,
 								);
+								storeBotReplyInHistory(
+									ctx.chat.id,
+									newReplyMsg.message_id,
+									"(No match for edited pattern chain)",
+								);
 							} catch (e) {
 								console.error(
 									"Failed to send new reply for no-match case (no previous):",
@@ -669,13 +801,11 @@ bot.on("edited_message", async (ctx) => {
 						return; // Stop further processing after no match
 					}
 
-					// Build the final message for the edit: just the result of the chain
+					// Build the final message for the edit
 					let finalMessage = currentText;
 
-					// --- NO INTERMEDIARY SUMMARY ---
 					// --- TRIM TO MAX LENGTH ---
 					if (finalMessage.length > MAX_MESSAGE_LENGTH) {
-						// Truncate the final result if it's too long
 						finalMessage = finalMessage.slice(0, MAX_MESSAGE_LENGTH);
 					}
 
@@ -687,8 +817,8 @@ bot.on("edited_message", async (ctx) => {
 					if (previousBotReplyId) {
 						try {
 							// Edit the message, ensuring parse_mode is MarkdownV2
-							// Escape the final message text before sending.
-							finalMessage = escapeMarkdownV2(finalMessage);
+							// CRITICAL FIX: Escape the final message text for MarkdownV2 AND literal backslashes correctly
+							finalMessage = escapeForMarkdownV2AndBackslashes(finalMessage);
 							await ctx.api.editMessageText(
 								ctx.chat.id,
 								previousBotReplyId,
@@ -703,6 +833,13 @@ bot.on("edited_message", async (ctx) => {
 							console.log(
 								`Edited bot reply ${previousBotReplyId} for target ${targetMsgId} (chain)`,
 							);
+							// --- NEW: Store the edited bot reply in history ---
+							storeBotReplyInHistory(
+								ctx.chat.id,
+								previousBotReplyId, // Use the existing bot message ID
+								finalMessage, // Use the new, potentially trimmed/escaped text
+							);
+							// --- END NEW ---
 						} catch (e) {
 							if (
 								e instanceof GrammyError &&
@@ -720,8 +857,8 @@ bot.on("edited_message", async (ctx) => {
 								try {
 									const newReplyMsg = await ctx.api.sendMessage(
 										ctx.chat.id,
-										// Escape the final message text before sending.
-										escapeMarkdownV2(finalMessage),
+										// CRITICAL FIX: Escape for MarkdownV2 and backslashes
+										escapeForMarkdownV2AndBackslashes(currentText),
 										{
 											reply_parameters: { message_id: targetMsgId },
 											parse_mode: "MarkdownV2", // Ensure parse mode is set
@@ -732,6 +869,13 @@ bot.on("edited_message", async (ctx) => {
 										ctx.chat.id,
 										newReplyMsg.message_id,
 									);
+									// --- NEW: Store the new bot reply in history ---
+									storeBotReplyInHistory(
+										ctx.chat.id,
+										newReplyMsg.message_id,
+										escapeForMarkdownV2AndBackslashes(currentText), // Store escaped version
+									);
+									// --- END NEW ---
 								} catch (e2) {
 									console.error(
 										"Failed to send new reply after edit failed (chain):",
@@ -747,8 +891,8 @@ bot.on("edited_message", async (ctx) => {
 						try {
 							const newReplyMsg = await ctx.api.sendMessage(
 								ctx.chat.id,
-								// Escape the final message text before sending.
-								escapeMarkdownV2(finalMessage),
+								// CRITICAL FIX: Escape for MarkdownV2 and backslashes
+								escapeForMarkdownV2AndBackslashes(currentText),
 								{
 									reply_parameters: { message_id: targetMsgId },
 									parse_mode: "MarkdownV2", // Ensure parse mode is set
@@ -759,6 +903,13 @@ bot.on("edited_message", async (ctx) => {
 								ctx.chat.id,
 								newReplyMsg.message_id,
 							);
+							// --- NEW: Store the new bot reply in history ---
+							storeBotReplyInHistory(
+								ctx.chat.id,
+								newReplyMsg.message_id,
+								escapeForMarkdownV2AndBackslashes(currentText), // Store escaped version
+							);
+							// --- END NEW ---
 						} catch (e) {
 							console.error(
 								"Failed to send new reply during edit handling (chain):",
@@ -772,22 +923,13 @@ bot.on("edited_message", async (ctx) => {
 					);
 				}
 			}
-		} else if (ctx.editedMessage) {
-			storeMessageInHistory(
-				ctx.chat.id,
-				ctx.editedMessage.message_id,
-				ctx.editedMessage.text || ctx.editedMessage.caption,
-			);
 		}
 	} catch (error) {
 		console.error("An error occurred in the edited_message handler:", error);
-		// Optionally notify the user, but be careful not to cause an infinite loop.
-		// For now, just log it.
 	}
 });
 
 // Register the /privacy and /start commands with Telegram's UI using the CommandGroup
-// This should happen *after* the CommandGroup is defined but *before* the bot starts.
 myCommands.setCommands(bot).catch((err) => {
 	console.error("Failed to set commands with Telegram:", err);
 });
@@ -797,8 +939,6 @@ bot.use(async (_, next) => {
 	cleanupOldEntries();
 });
 
-// Use runner.start instead of bot.start
+// Use runner.start
 run(bot);
 console.log("Bot started using runner!");
-// Note: The runner handles startup and connection management.
-// The original `bot.start({...})` call is replaced by `run(bot, {...})`.
