@@ -21,6 +21,7 @@ const base = (process.env.BASE_URL || "https://api.telegram.org").trim();
 const CLEANUP_INTERVAL_MS = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 const MAX_CHAIN_LENGTH = 5; // Maximum number of sed commands to process in a chain
 const MAX_MESSAGE_LENGTH = 4096; // Telegram's max message length
+const DEFAULT_SUBSTITUTION_TIMEOUT_MS = 60000; // 60 seconds default timeout
 
 // --- Regex for sed command ---
 const SED_PATTERN = /^s\/((?:\\.|[^\/])+?)\/((?:\\.|[^\/])*?)(\/.*)?$/;
@@ -88,7 +89,10 @@ myCommands
 	.addToScope({ type: "all_private_chats" }, async (ctx) => {
 		try {
 			await ctx.reply(
-				"Hello! I am a regex bot. Use s/find/replace/flags to substitute text in messages. You can chain multiple commands, one per line.",
+				"Hello! I am a regex bot. Use s/find/replace/flags to substitute text in messages. You can chain multiple commands, one per line.\n\n" +
+					"Special flags:\n" +
+					"- `p`: Show performance timing (e.g., `s/pattern/repl/p`)\n" +
+					"Use `\\N` in replacements for captured groups (e.g., `\\1`).",
 			);
 		} catch (error) {
 			console.error("An error occurred in the start command handler:", error);
@@ -215,7 +219,7 @@ async function findTargetMessage(
 				const testText = row.text;
 				// Use the first command pattern from the chain to find the initial target
 				const fr = match[1].replace(/\\\//g, "/");
-				const regex = new RegExp(fr, getRegexFlags(match[3]));
+				const regex = new RegExp(fr, getRegexFlags(match[3]).flags); // Use processed flags
 				if (testText && regex.test(testText)) {
 					targetMsgText = testText;
 					targetMsgId = row.message_id;
@@ -227,88 +231,155 @@ async function findTargetMessage(
 	return { targetMsgText, targetMsgId };
 }
 
-function getRegexFlags(flagsMatch: string | undefined): string {
-	if (!flagsMatch) return "";
-	return flagsMatch.substring(1).toLowerCase();
+// Modify getRegexFlags to also return the original flags string for checking custom flags like 'p'
+function getRegexFlags(flagsMatch: string | undefined): {
+	flags: string;
+	originalFlags: string | undefined;
+} {
+	if (!flagsMatch) return { flags: "", originalFlags: undefined };
+
+	// The original flags string including the leading '/', e.g., "/pgi"
+	const originalFlags = flagsMatch;
+	// Extract the part after the leading '/', e.g., "pgi"
+	const rawFlags = flagsMatch.substring(1);
+
+	// Define standard JavaScript RegExp flags
+	const standardFlagChars = ["g", "i", "m", "s", "u", "y"]; // As per JS RegExp spec
+
+	// Filter the raw flags to include only standard JS flags, make them lowercase, deduplicate, sort (optional for consistency)
+	// Using a Set ensures uniqueness, Array.from + filter ensures only standard flags, sort for consistency, join.
+	const standardFlagsArray = Array.from(new Set(rawFlags))
+		.filter((char) => standardFlagChars.includes(char.toLowerCase()))
+		.map((char) => char.toLowerCase())
+		.sort(); // Sorting is optional but ensures consistent order like "gi"
+
+	// Join the filtered standard flags into a string for the RegExp constructor
+	const flags = standardFlagsArray.join("");
+
+	return { flags, originalFlags }; // Return both standard flags and the original string
 }
 
-// Apply substitution with a timeout check
+// --- CORRECTED ESCAPING FUNCTION ---
+// Function to escape MarkdownV2 special characters and literal backslashes correctly
+// Order matters: escape backslashes first, then Markdown chars.
+function escapeForMarkdownV2AndBackslashes(text: string): string {
+	// 1. First, escape any literal backslashes in the original text.
+	// One \ becomes \\.
+	let escapedText = text.replace(/\\/g, "\\\\");
+
+	// 2. Then, escape all MarkdownV2 special characters with a single backslash.
+	// This correctly handles |, ., -, etc., without affecting the \\ from step 1.
+	// Standard MarkdownV2 special chars: _ * [ ] ( ) ~ ` > # + - = | { } . !
+	escapedText = escapedText.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, "\\$1");
+
+	return escapedText;
+}
+// --- END CORRECTED ESCAPING FUNCTION ---
+
+// Apply substitution using Bun.spawn with a real timeout and optional performance measurement
 async function applySubstitutionWithTimeout(
-    text: string,
-    match: RegExpMatchArray,
-    timeoutMs: number = 60000,
-): Promise<{ result: string; matched: boolean } | null> {
+	text: string,
+	match: RegExpMatchArray,
+	timeoutMs: number = DEFAULT_SUBSTITUTION_TIMEOUT_MS,
+): Promise<{
+	result: string;
+	matched: boolean;
+	performanceInfo?: string;
+} | null> {
+	// --- Process the 'from' (pattern) and 'to' (replacement) parts ---
+	const fr = match[1].replace(/\\\//g, "/"); // Clean the 'from' pattern
+	let rawTo = match[2].replace(/\\\//g, "/"); // Clean the 'to' part
+	// Convert user's \N syntax to JS's $N syntax for the replacement string
+	const processedTo = rawTo.replace(/\\(\d+)/g, "$$$1"); // Convert \N to $N
+	const { flags, originalFlags } = getRegexFlags(match[3]); // Get both standard and original flags
+	// --- End processing of parts ---
 
-    // --- Process the 'from' (pattern) and 'to' (replacement) parts ---
-    const fr = match[1].replace(/\\\//g, "/"); // Clean the 'from' pattern
-    let rawTo = match[2].replace(/\\\//g, "/"); // Clean the 'to' part
-    // Convert user's \N syntax to JS's $N syntax for the replacement string
-    const processedTo = rawTo.replace(/\\(\d+)/g, '$$$1'); // Convert \N to $N
-    const flags = getRegexFlags(match[3]);
-    // --- End processing of parts ---
+	// --- Check for Performance Flag ---
+	const includePerformance = originalFlags?.toLowerCase().includes("p");
+	let startTime: number | undefined;
+	// --- End Performance Flag Check ---
 
-    // --- Spawn the subprocess to perform the regex ---
-    const proc = Bun.spawn([
-        "bun", // Command to run Bun
-        "hellspawn.ts", // Path to the script (adjust if needed)
-        text,    // Pass the target text as argument 1
-        fr,      // Pass the cleaned pattern as argument 2
-        flags,   // Pass the flags as argument 3
-        processedTo // Pass the *processed* replacement string as argument 4
-    ]);
-    // --- End spawning subprocess ---
+	try {
+		// Record start time if performance flag is set
+		if (includePerformance) {
+			startTime = performance.now(); // Get high-resolution timestamp
+		}
 
-    // --- Set up the main thread timeout ---
-    return new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-            console.log(`Substitution process for pattern /${fr}/ timed out after ${timeoutMs}ms, killing process.`);
-            proc.kill(); // Kill the spawned subprocess
-            // Resolve with null to indicate timeout
-            resolve(null);
-        }, timeoutMs);
-        // --- End timeout setup ---
+		// --- Spawn the subprocess to perform the regex WITH TIMEOUT OPTIONS ---
+		// Use Bun.file() or relative path "./perform_regex.ts" if needed, or absolute path
+		const proc = Bun.spawn({
+			cmd: [
+				"bun", // Command to run Bun
+				"./hellspawn.ts", // Path to the script (adjust if needed, e.g., "./hellspawn")
+				text, // Pass the target text as argument 1
+				fr, // Pass the cleaned pattern as argument 2
+				flags, // Pass the processed standard flags (e.g., 'gi') as argument 3
+				processedTo, // Pass the *processed* replacement string as argument 4
+			],
+			// Set the timeout and kill signal directly in spawn options
+			timeout: timeoutMs, // Milliseconds before the process is killed
+			killSignal: "SIGKILL", // Signal to send to kill the process (SIGTERM is default)
+			stdin: "ignore", // We are not sending anything to stdin
+			stdout: "pipe", // We need to read the output
+			stderr: "pipe", // We need to read errors
+		});
+		// --- End spawning subprocess with timeout ---
 
-        // --- Wait for the subprocess to finish ---
-        (async () => {
-            try {
-                // Wait for the subprocess to exit
-                const exitCode = await proc.exited;
+		// Wait for the subprocess to exit (either naturally or due to timeout/kill)
+		const exitCode = await proc.exited;
 
-                // Clear the timeout if the process finished in time
-                clearTimeout(timeoutId);
+		// Calculate duration if performance flag was set
+		let durationMs: number | undefined;
+		if (includePerformance && startTime !== undefined) {
+			const endTime = performance.now();
+			durationMs = endTime - startTime;
+		}
 
-                if (exitCode === 0) {
-                    // Process finished successfully
-                    const rawOutput = await new Response(proc.stdout).text();
-                    const result = rawOutput.trimEnd(); // Get output and remove trailing newline
+		if (exitCode === 0) {
+			// Process finished successfully
+			const rawOutput = await new Response(proc.stdout).text();
+			const result = rawOutput.trimEnd(); // Get output and remove trailing newline
 
-                    // Determine if a match occurred by comparing input and output
-                    const matched = result !== text;
-                    resolve({ result, matched });
-                } else {
-                    // Process failed or was killed due to timeout
-                    const rawStderr = await new Response(proc.stderr).text();
-                    const stderr = rawStderr.trim();
-                    if (stderr) {
-                        console.error(`Subprocess error for /${fr}/: ${stderr}`);
-                    } else {
-                        console.error(`Subprocess for /${fr}/ exited with code ${exitCode}, no stderr.`);
-                    }
+			// Determine if a match occurred by comparing input and output
+			const matched = result !== text;
 
-                    // If exitCode was due to timeout (proc.kill()), stderr might be empty
-                    // or indicate termination. We resolve with null for any non-zero exit.
-                    resolve(null); // Indicate failure/timeout
-                }
-            } catch (error) {
-                // Clear the timeout in case of an unexpected error awaiting the process
-                clearTimeout(timeoutId);
-                console.error("Unexpected error waiting for subprocess:", error);
-                // Reject the promise if there's an unexpected error in the spawning/awaiting logic
-                reject(error);
-            }
-        })();
-        // --- End waiting for subprocess ---
-    });
+			// Prepare the resolution object
+			const resolution: {
+				result: string;
+				matched: boolean;
+				performanceInfo?: string;
+			} = { result, matched };
+
+			// Add performance info if requested and measured
+			if (includePerformance && durationMs !== undefined) {
+				resolution.performanceInfo = ` (⏱️ ${durationMs.toFixed(2)}ms)`;
+			}
+
+			return resolution; // Resolve with the successful result
+		} else {
+			// Process failed or was killed due to timeout/options
+			const rawStderr = await new Response(proc.stderr).text();
+			const stderr = rawStderr.trim();
+			if (stderr) {
+				console.error(`Subprocess error for /${fr}/${flags}: ${stderr}`);
+			} else {
+				// If killed by timeout, stderr might be empty.
+				// The exit code might be non-zero (e.g., 124 for timeout in some systems, or the signal code).
+				// Bun might expose the signal via proc.killed or similar, but checking exitCode is standard.
+				console.error(
+					`Subprocess for /${fr}/${flags} exited with code ${exitCode} (likely timed out/killed). No stderr.`,
+				);
+			}
+
+			// Resolve with null to indicate failure/timeout
+			return null;
+		}
+	} catch (error) {
+		// Catch errors related to spawning the process itself (e.g., script not found)
+		console.error("Unexpected error spawning subprocess for regex:", error);
+		// Reject the promise if there's an unexpected error in the spawning logic
+		throw error; // Or return null if you prefer to handle spawn errors as "failures" rather than exceptions
+	}
 }
 
 function storeBotReplyMapping(
@@ -336,65 +407,6 @@ function getBotReplyMessageId(
 	return row?.bot_message_id;
 }
 
-// --- CORRECTED ESCAPING FUNCTION ---
-// Function to escape MarkdownV2 special characters and literal backslashes correctly
-// Order matters: escape backslashes first, then Markdown chars.
-function escapeForMarkdownV2AndBackslashes(text: string): string {
-	// 1. First, escape any literal backslashes in the original text.
-	// One \ becomes \\.
-	let escapedText = text.replace(/\\/g, "\\\\");
-
-	// 2. Then, escape all MarkdownV2 special characters with a single backslash.
-	// This correctly handles |, ., -, etc., without affecting the \\ from step 1.
-	// The regex includes \\ to ensure we don't double-process backslashes,
-	// but the replacement logic handles it correctly because we are prepending \.
-	// The key is that step 1 turned all \ into \\.
-	// Step 2 finds \\ and turns it into \\. (Which is correct, it stays \\).
-	// Step 2 finds | and turns it into \|. (Correct).
-	// Example trace for "A \\ B |":
-	// After step 1: "A \\\\ B |"
-	// In step 2 regex /[\\_*...]/g:
-	// Match 1: \\ (1st \). $1="\". Replace with \\. Result starts "A \\\\\...".
-	// Match 2: \\ (2nd \). $1="\". Replace with \\. Result "A \\\\\\\\ B |".
-	// Match 3: |. $1="|". Replace with \|". Final "A \\\\\\\\ B \\|".
-	// This is still wrong because the \\ from step 1 is being escaped again.
-	// The problem is that the character class [\\...] includes \.
-	// When we find \, we replace it with \\. This is incorrect for the \ we just added.
-	// We only want to escape the Markdown special chars, not the backslashes we just used for escaping.
-	// The correct way is to escape Markdown chars first, then backslashes.
-	// But that leads to the original problem.
-	// Let's try escaping backslashes first, then Markdown chars, but be smarter in the Markdown step.
-	// The issue is the regex in step 2 matches \. We don't want it to match the \ we just added for escaping other chars.
-	// A better approach: Escape backslashes. Then escape Markdown chars, but be aware that some \ might now be part of \\.
-	// Let's try the correct order again, and see if the regex is the issue.
-	// Correct Order:
-	// 1. Escape literal backslashes: \ -> \\
-	// 2. Escape Markdown special chars: | -> \|, but do NOT re-escape the \ from step 1 if it forms \\.
-	// How to express "escape Markdown chars but not if they are part of \\"?
-	// It's complex. Let's stick to the "escape backslashes first" logic, but ensure the Markdown regex doesn't double-process.
-	// The problem in the previous trace was misinterpreting how the regex works.
-	// Let's trace carefully with the CORRECT order (backslashes FIRST):
-	// Original: "A \\ B | C _"
-	// Step 1 (Escape backslashes): text.replace(/\\/g, '\\\\') -> "A \\\\ B | C _"
-	// Step 2 (Escape Markdown): escapedText.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, '\\$1')
-	// Regex finds each character in the class:
-	// Finds | : $1="|". Replace with \| -> "A \\\\ B \\| C _"
-	// Finds _ : $1="_". Replace with \_ -> "A \\\\ B \\| C \\_"
-	// This looks correct. The \\ from step 1 is left untouched by step 2 because \ is not in the character class used in step 2's regex.
-	// Ah! My previous trace was wrong. The character class in step 2 was `[_*...\\]`. It SHOULD NOT include `\\`.
-	// The character class should only be the Markdown special chars.
-	// Let's redefine the function with the CORRECT regex (excluding \\ from the Markdown escape class).
-
-	// 1. Escape literal backslashes first.
-	escapedText = text.replace(/\\/g, "\\\\");
-	// 2. Escape Markdown special chars. The regex MUST NOT include \\ or \.
-	// Standard MarkdownV2 special chars: _ * [ ] ( ) ~ ` > # + - = | { } . !
-	escapedText = escapedText.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, "\\$1");
-
-	return escapedText;
-}
-// --- END CORRECTED ESCAPING FUNCTION ---
-
 // --- Bot Handlers ---
 
 bot.on("message", async (ctx) => {
@@ -418,6 +430,7 @@ bot.on("message", async (ctx) => {
 				// Parse the first command to find the target (for history lookup)
 				const firstMatch = sedCommands[0].match(SED_PATTERN);
 				if (!firstMatch) {
+					// This should theoretically not happen if the filter worked correctly
 					return;
 				}
 
@@ -436,10 +449,12 @@ bot.on("message", async (ctx) => {
 				if (targetMsgText && targetMsgId) {
 					// --- Process the chain of commands ---
 					let currentText = targetMsgText;
+					// Modify allResults type to include performanceInfo
 					let allResults: {
 						pattern: string;
 						result: string;
 						matched: boolean;
+						performanceInfo?: string;
 					}[] = [];
 					let chainErrored = false;
 					let chainTimedOut = false;
@@ -454,7 +469,7 @@ bot.on("message", async (ctx) => {
 						const substitutionResult = await applySubstitutionWithTimeout(
 							currentText,
 							match,
-							60000, // 60 second timeout per command
+							DEFAULT_SUBSTITUTION_TIMEOUT_MS, // 60 second timeout per command
 						);
 
 						if (substitutionResult === null) {
@@ -462,8 +477,14 @@ bot.on("message", async (ctx) => {
 							break; // Stop processing the chain
 						}
 
-						const { result, matched } = substitutionResult;
-						allResults.push({ pattern: cmdLine, result, matched });
+						const { result, matched, performanceInfo } = substitutionResult; // Destructure performanceInfo
+						// Include performanceInfo in allResults
+						allResults.push({
+							pattern: cmdLine,
+							result,
+							matched,
+							performanceInfo,
+						});
 						currentText = result; // Feed the result into the next command
 
 						// Check if the intermediate result is getting too long
@@ -496,11 +517,39 @@ bot.on("message", async (ctx) => {
 						finalMessage = finalMessage.slice(0, MAX_MESSAGE_LENGTH);
 					}
 
-					// Send the final formatted message
-					// Note: Using parse_mode: "MarkdownV2"
-					// CRITICAL FIX: Escape the final message text for MarkdownV2 AND literal backslashes correctly
-					finalMessage = escapeForMarkdownV2AndBackslashes(finalMessage);
+					// --- Check for Performance Info and Append ---
+					// Check if *any* command in the chain used the 'p' flag
+					const hasPerformanceFlag = allResults.some((r) => r.performanceInfo);
+					if (hasPerformanceFlag) {
+						// Collect performance info strings from commands that had it
+						const perfInfos = allResults
+							.filter((r) => r.performanceInfo)
+							.map((r) => r.performanceInfo)
+							.join(""); // Join them, e.g., " (⏱️ 10.23ms) (⏱️ 5.11ms)"
 
+						// Append the collected performance info to the final message
+						// Ensure we don't exceed MAX_MESSAGE_LENGTH even after appending perf info
+						const potentialFinalMessage = finalMessage + perfInfos;
+						if (potentialFinalMessage.length <= MAX_MESSAGE_LENGTH) {
+							finalMessage = potentialFinalMessage;
+						} else {
+							// If adding perf info makes it too long, truncate the main result slightly more
+							// and then append what fits of the perf info, or just append a generic note.
+							// Simple approach: truncate main result and add a short note
+							finalMessage =
+								finalMessage.slice(0, MAX_MESSAGE_LENGTH - 50) +
+								"... (⏱️ +info)";
+							// Or, more complex: try to fit some perf info
+							// const truncatedMain = finalMessage.slice(0, MAX_MESSAGE_LENGTH - perfInfos.length);
+							// finalMessage = truncatedMain + perfInfos;
+						}
+					}
+					// --- End Performance Info Append ---
+
+					// Send the final formatted message
+					// Note: Using parse_mode: "MarkdownV2" for potential markdown chars in the final result
+					// Escape the final message text before sending.
+					finalMessage = escapeForMarkdownV2AndBackslashes(finalMessage); // Use the corrected escaping function
 					try {
 						const sentMsg = await ctx.api.sendMessage(
 							ctx.chat.id,
@@ -544,6 +593,9 @@ bot.on("message", async (ctx) => {
 		}
 	} catch (error) {
 		console.error("An error occurred in the message handler:", error);
+		// Optionally notify the user, but be careful not to cause an infinite loop
+		// if the error itself is related to sending messages.
+		// For now, just log it.
 	}
 });
 
@@ -586,10 +638,12 @@ bot.on("edited_message", async (ctx) => {
 				if (targetMsgText && targetMsgId) {
 					// --- Process the chain of commands (similar to message handler) ---
 					let currentText = targetMsgText;
+					// Modify allResults type to include performanceInfo
 					let allResults: {
 						pattern: string;
 						result: string;
 						matched: boolean;
+						performanceInfo?: string;
 					}[] = [];
 					let chainErrored = false;
 					let chainTimedOut = false;
@@ -603,7 +657,7 @@ bot.on("edited_message", async (ctx) => {
 						const substitutionResult = await applySubstitutionWithTimeout(
 							currentText,
 							match,
-							60000,
+							DEFAULT_SUBSTITUTION_TIMEOUT_MS,
 						);
 
 						if (substitutionResult === null) {
@@ -611,8 +665,14 @@ bot.on("edited_message", async (ctx) => {
 							break;
 						}
 
-						const { result, matched } = substitutionResult;
-						allResults.push({ pattern: cmdLine, result, matched });
+						const { result, matched, performanceInfo } = substitutionResult; // Destructure performanceInfo
+						// Include performanceInfo in allResults
+						allResults.push({
+							pattern: cmdLine,
+							result,
+							matched,
+							performanceInfo,
+						});
 						currentText = result;
 
 						if (currentText.length > MAX_MESSAGE_LENGTH) {
@@ -621,8 +681,10 @@ bot.on("edited_message", async (ctx) => {
 					}
 
 					if (chainErrored) {
+						// Handle error during edit - maybe send a new message or edit an existing bot reply if possible
+						// For simplicity, let's just log and potentially send a new message
 						console.error("Error occurred during sed chain edit processing.");
-						return;
+						return; // Or handle error state in mapping if needed
 					}
 					if (chainTimedOut) {
 						// Handle timeout during edit
@@ -636,13 +698,20 @@ bot.on("edited_message", async (ctx) => {
 									ctx.chat.id,
 									previousBotReplyId,
 									"(Substitution chain timed out)",
-									{ parse_mode: "MarkdownV2" },
+									{ parse_mode: "MarkdownV2" }, // Ensure parse mode is set if the original had it
 								);
 								storeBotReplyMapping(
 									targetMsgId,
 									ctx.chat.id,
 									previousBotReplyId,
 								);
+								// --- NEW: Store the bot's sent reply in history ---
+								storeBotReplyInHistory(
+									ctx.chat.id,
+									previousBotReplyId,
+									"(Substitution chain timed out)",
+								);
+								// --- END NEW ---
 							} catch (e) {
 								if (
 									e instanceof GrammyError &&
@@ -668,11 +737,13 @@ bot.on("edited_message", async (ctx) => {
 											ctx.chat.id,
 											newReplyMsg.message_id,
 										);
+										// --- NEW: Store the new bot reply in history ---
 										storeBotReplyInHistory(
 											ctx.chat.id,
 											newReplyMsg.message_id,
 											"(Substitution chain timed out)",
 										);
+										// --- END NEW ---
 									} catch (e2) {
 										console.error(
 											"Failed to send new reply for timeout case:",
@@ -696,11 +767,13 @@ bot.on("edited_message", async (ctx) => {
 									ctx.chat.id,
 									newReplyMsg.message_id,
 								);
+								// --- NEW: Store the new bot reply in history ---
 								storeBotReplyInHistory(
 									ctx.chat.id,
 									newReplyMsg.message_id,
 									"(Substitution chain timed out)",
 								);
+								// --- END NEW ---
 							} catch (e) {
 								console.error(
 									"Failed to send new reply for timeout case (no previous):",
@@ -723,13 +796,20 @@ bot.on("edited_message", async (ctx) => {
 									ctx.chat.id,
 									previousBotReplyId,
 									"(No match for edited pattern chain)",
-									{ parse_mode: "MarkdownV2" },
+									{ parse_mode: "MarkdownV2" }, // Ensure parse mode is set if the original had it
 								);
 								storeBotReplyMapping(
 									targetMsgId,
 									ctx.chat.id,
 									previousBotReplyId,
 								);
+								// --- NEW: Store the bot's sent reply in history ---
+								storeBotReplyInHistory(
+									ctx.chat.id,
+									previousBotReplyId,
+									"(No match for edited pattern chain)",
+								);
+								// --- END NEW ---
 							} catch (e) {
 								if (
 									e instanceof GrammyError &&
@@ -758,11 +838,13 @@ bot.on("edited_message", async (ctx) => {
 											ctx.chat.id,
 											newReplyMsg.message_id,
 										);
+										// --- NEW: Store the new bot reply in history ---
 										storeBotReplyInHistory(
 											ctx.chat.id,
 											newReplyMsg.message_id,
 											"(No match for edited pattern chain)",
 										);
+										// --- END NEW ---
 									} catch (e2) {
 										console.error(
 											"Failed to send new reply for no-match case:",
@@ -786,11 +868,13 @@ bot.on("edited_message", async (ctx) => {
 									ctx.chat.id,
 									newReplyMsg.message_id,
 								);
+								// --- NEW: Store the new bot reply in history ---
 								storeBotReplyInHistory(
 									ctx.chat.id,
 									newReplyMsg.message_id,
 									"(No match for edited pattern chain)",
 								);
+								// --- END NEW ---
 							} catch (e) {
 								console.error(
 									"Failed to send new reply for no-match case (no previous):",
@@ -809,6 +893,35 @@ bot.on("edited_message", async (ctx) => {
 						finalMessage = finalMessage.slice(0, MAX_MESSAGE_LENGTH);
 					}
 
+					// --- Check for Performance Info and Append (EDIT HANDLER) ---
+					// Check if *any* command in the chain used the 'p' flag
+					const hasPerformanceFlag = allResults.some((r) => r.performanceInfo);
+					if (hasPerformanceFlag) {
+						// Collect performance info strings from commands that had it
+						const perfInfos = allResults
+							.filter((r) => r.performanceInfo)
+							.map((r) => r.performanceInfo)
+							.join(""); // Join them, e.g., " (⏱️ 10.23ms) (⏱️ 5.11ms)"
+
+						// Append the collected performance info to the final message
+						// Ensure we don't exceed MAX_MESSAGE_LENGTH even after appending perf info
+						const potentialFinalMessage = finalMessage + perfInfos;
+						if (potentialFinalMessage.length <= MAX_MESSAGE_LENGTH) {
+							finalMessage = potentialFinalMessage;
+						} else {
+							// If adding perf info makes it too long, truncate the main result slightly more
+							// and then append what fits of the perf info, or just append a generic note.
+							// Simple approach:
+							finalMessage =
+								finalMessage.slice(0, MAX_MESSAGE_LENGTH - 50) +
+								"... (⏱️ +info)";
+							// Or, more complex: try to fit some perf info
+							// const truncatedMain = finalMessage.slice(0, MAX_MESSAGE_LENGTH - perfInfos.length);
+							// finalMessage = truncatedMain + perfInfos;
+						}
+					}
+					// --- End Performance Info Append (EDIT HANDLER) ---
+
 					// --- Handle editing or sending the new message ---
 					const previousBotReplyId = getBotReplyMessageId(
 						targetMsgId,
@@ -817,8 +930,8 @@ bot.on("edited_message", async (ctx) => {
 					if (previousBotReplyId) {
 						try {
 							// Edit the message, ensuring parse_mode is MarkdownV2
-							// CRITICAL FIX: Escape the final message text for MarkdownV2 AND literal backslashes correctly
-							finalMessage = escapeForMarkdownV2AndBackslashes(finalMessage);
+							// Escape the final message text before sending.
+							finalMessage = escapeForMarkdownV2AndBackslashes(finalMessage); // Use the corrected escaping function
 							await ctx.api.editMessageText(
 								ctx.chat.id,
 								previousBotReplyId,
@@ -857,8 +970,8 @@ bot.on("edited_message", async (ctx) => {
 								try {
 									const newReplyMsg = await ctx.api.sendMessage(
 										ctx.chat.id,
-										// CRITICAL FIX: Escape for MarkdownV2 and backslashes
-										escapeForMarkdownV2AndBackslashes(currentText),
+										// Escape the final message text before sending.
+										escapeForMarkdownV2AndBackslashes(finalMessage), // Use the corrected escaping function
 										{
 											reply_parameters: { message_id: targetMsgId },
 											parse_mode: "MarkdownV2", // Ensure parse mode is set
@@ -873,7 +986,7 @@ bot.on("edited_message", async (ctx) => {
 									storeBotReplyInHistory(
 										ctx.chat.id,
 										newReplyMsg.message_id,
-										escapeForMarkdownV2AndBackslashes(currentText), // Store escaped version
+										escapeForMarkdownV2AndBackslashes(finalMessage), // Use the potentially trimmed/escaped text
 									);
 									// --- END NEW ---
 								} catch (e2) {
@@ -891,8 +1004,8 @@ bot.on("edited_message", async (ctx) => {
 						try {
 							const newReplyMsg = await ctx.api.sendMessage(
 								ctx.chat.id,
-								// CRITICAL FIX: Escape for MarkdownV2 and backslashes
-								escapeForMarkdownV2AndBackslashes(currentText),
+								// Escape the final message text before sending.
+								escapeForMarkdownV2AndBackslashes(finalMessage), // Use the corrected escaping function
 								{
 									reply_parameters: { message_id: targetMsgId },
 									parse_mode: "MarkdownV2", // Ensure parse mode is set
@@ -907,7 +1020,7 @@ bot.on("edited_message", async (ctx) => {
 							storeBotReplyInHistory(
 								ctx.chat.id,
 								newReplyMsg.message_id,
-								escapeForMarkdownV2AndBackslashes(currentText), // Store escaped version
+								escapeForMarkdownV2AndBackslashes(finalMessage), // Use the potentially trimmed/escaped text
 							);
 							// --- END NEW ---
 						} catch (e) {
@@ -923,13 +1036,22 @@ bot.on("edited_message", async (ctx) => {
 					);
 				}
 			}
+		} else if (ctx.editedMessage) {
+			storeMessageInHistory(
+				ctx.chat.id,
+				ctx.editedMessage.message_id,
+				ctx.editedMessage.text || ctx.editedMessage.caption,
+			);
 		}
 	} catch (error) {
 		console.error("An error occurred in the edited_message handler:", error);
+		// Optionally notify the user, but be careful not to cause an infinite loop.
+		// For now, just log it.
 	}
 });
 
 // Register the /privacy and /start commands with Telegram's UI using the CommandGroup
+// This should happen *after* the CommandGroup is defined but *before* the bot starts.
 myCommands.setCommands(bot).catch((err) => {
 	console.error("Failed to set commands with Telegram:", err);
 });
@@ -939,6 +1061,8 @@ bot.use(async (_, next) => {
 	cleanupOldEntries();
 });
 
-// Use runner.start
+// Use runner.start instead of bot.start
 run(bot);
 console.log("Bot started using runner!");
+// Note: The runner handles startup and connection management.
+// The original `bot.start({...})` call is replaced by `run(bot, {...})`.
