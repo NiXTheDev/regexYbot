@@ -18,6 +18,8 @@ if (!token) {
 }
 const base = process.env.BASE_URL || "https://api.telegram.org";
 const CLEANUP_INTERVAL_MS = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
+const MAX_CHAIN_LENGTH = 5; // Maximum number of sed commands to process in a chain
+const MAX_MESSAGE_LENGTH = 4096; // Telegram's max message length
 
 // --- Regex for sed command ---
 const SED_PATTERN = /^s\/((?:\\.|[^\/])+?)\/((?:\\.|[^\/])*?)(\/.*)?$/;
@@ -85,7 +87,7 @@ myCommands
 	.addToScope({ type: "all_private_chats" }, async (ctx) => {
 		try {
 			await ctx.reply(
-				"Hello! I am a regex bot. Use s/find/replace/flags to substitute text in messages.",
+				"Hello! I am a regex bot. Use s/find/replace/flags to substitute text in messages. You can chain multiple commands, one per line.",
 			);
 		} catch (error) {
 			console.error("An error occurred in the start command handler:", error);
@@ -154,7 +156,7 @@ function storeMessageInHistory(
 
 async function findTargetMessage(
 	ctx: MyContext,
-	match: RegExpMatchArray,
+	match: RegExpMatchArray, // This is now just the first match for history lookup if no reply
 	excludeMessageId?: number,
 ) {
 	let targetMsgText: string | undefined;
@@ -191,6 +193,7 @@ async function findTargetMessage(
 
 			for (const row of rows) {
 				const testText = row.text;
+				// Use the first command pattern from the chain to find the initial target
 				const fr = match[1].replace(/\\\//g, "/");
 				const regex = new RegExp(fr, getRegexFlags(match[3]));
 				if (testText && regex.test(testText)) {
@@ -281,14 +284,25 @@ bot.on("message", async (ctx) => {
 			);
 		}
 
-		if (ctx.message?.text && SED_PATTERN.test(ctx.message.text)) {
-			const match = ctx.message.text.match(SED_PATTERN);
-			if (match) {
+		if (ctx.message?.text && ctx.message.text.includes("s/")) {
+			// Split the message text by newlines to get potential commands
+			const lines = ctx.message.text.split("\n");
+			// Filter lines that match the SED_PATTERN
+			const sedCommands = lines.filter((line) => SED_PATTERN.test(line.trim()));
+
+			if (sedCommands.length > 0) {
+				// Parse the first command to find the target (for history lookup)
+				const firstMatch = sedCommands[0].match(SED_PATTERN);
+				if (!firstMatch) {
+					// This should theoretically not happen if the filter worked correctly
+					return;
+				}
+
 				const { targetMsgText, targetMsgId } = await findTargetMessage(
 					ctx,
-					match,
+					firstMatch,
 					undefined,
-				); // Pass MyContext and potentially excludeId if needed in future
+				);
 
 				// Check if the target message text itself is an 's/.../.../' command
 				if (targetMsgText && targetMsgId && SED_PATTERN.test(targetMsgText)) {
@@ -297,45 +311,125 @@ bot.on("message", async (ctx) => {
 				}
 
 				if (targetMsgText && targetMsgId) {
-					const substitutionResult = await applySubstitutionWithTimeout(
-						targetMsgText,
-						match,
-						60000,
-					); // 60 second timeout
+					// --- Process the chain of commands ---
+					let currentText = targetMsgText;
+					let allResults: {
+						pattern: string;
+						result: string;
+						matched: boolean;
+					}[] = [];
+					let chainErrored = false;
+					let chainTimedOut = false;
 
-					if (substitutionResult) {
-						// Only proceed if substitution didn't time out or fail
-						const { result, matched } = substitutionResult;
-						if (matched) {
-							try {
-								const sentMsg = await ctx.api.sendMessage(ctx.chat.id, result, {
-									reply_parameters: { message_id: targetMsgId },
-								});
-								storeBotReplyMapping(
-									targetMsgId,
-									ctx.chat.id,
-									sentMsg.message_id,
-								);
-							} catch (e) {
-								console.error("Error sending reply for sed command:", e);
-								// Optionally send an error message to the user if it's not a known error like flood control
-								if (
-									e instanceof GrammyError &&
-									e.description.includes("Flood control")
-								) {
-									// Silently ignore flood control errors or handle them specifically
-									console.warn("Flood control hit when sending sed reply.");
-								} else {
-									// await ctx.reply("Failed to send substitution result.");
-								}
-							}
-						} else {
-							await ctx.reply("Substitution pattern did not match.");
+					// Limit the chain length
+					const commandsToProcess = sedCommands.slice(0, MAX_CHAIN_LENGTH);
+
+					for (const cmdLine of commandsToProcess) {
+						const match = cmdLine.match(SED_PATTERN);
+						if (!match) continue; // Shouldn't happen due to filter, but safe check
+
+						const substitutionResult = await applySubstitutionWithTimeout(
+							currentText,
+							match,
+							60000, // 60 second timeout per command
+						);
+
+						if (substitutionResult === null) {
+							chainTimedOut = true;
+							break; // Stop processing the chain
 						}
-					} else {
-						await ctx.reply("Substitution took too long (timeout).");
+
+						const { result, matched } = substitutionResult;
+						allResults.push({ pattern: cmdLine, result, matched });
+						currentText = result; // Feed the result into the next command
+
+						// Check if the intermediate result is getting too long
+						// We'll check against a threshold before adding more intermediaries
+						if (currentText.length > MAX_MESSAGE_LENGTH) {
+							// Stop processing further commands if the result is too long
+							// This is a simplification; a more robust check would factor in the summary message length too.
+							break;
+						}
+					}
+
+					// --- Format the response ---
+					if (chainErrored) {
+						await ctx.reply("An error occurred during the substitution chain.");
+						return;
+					}
+					if (chainTimedOut) {
+						await ctx.reply("The substitution chain took too long (timeout).");
+						return;
+					}
+
+					// If no commands matched anything, inform the user
+					if (allResults.every((r) => !r.matched)) {
+						await ctx.reply("Substitution patterns did not match.");
+						return;
+					}
+
+					// Build the final message
+					let finalMessage = currentText; // The result of the last successful command
+
+					// Build the summary/intermediaries part
+					if (allResults.length > 1) {
+						// Only show intermediaries if there was more than one command
+						// Start building the summary
+						let summary = "\n\n";
+						for (let i = 0; i < allResults.length; i++) {
+							summary += `<b>Step ${i + 1}:</b> <code>${allResults[i].pattern}</code>\n`;
+							if (allResults[i].matched) {
+								// Only show the result if it was a match
+								summary += `-> <pre>${allResults[i].result}</pre>\n`;
+							} else {
+								summary += `-> (No match)\n`;
+							}
+						}
+
+						// Check if adding the summary keeps the message under the limit
+						if ((finalMessage + summary).length <= MAX_MESSAGE_LENGTH) {
+							finalMessage += summary;
+						} else {
+							// If it's too long, just show the final result and a note
+							finalMessage += `\n\n(Chain summary omitted due to length)`;
+						}
+					} else if (allResults.length === 1 && !allResults[0].matched) {
+						// If there was only one command and it didn't match
+						finalMessage = "Substitution pattern did not match.";
+					}
+					// If there was one command and it *did* match, finalMessage is already the result.
+
+					// Send the final formatted message
+					try {
+						const sentMsg = await ctx.api.sendMessage(
+							ctx.chat.id,
+							finalMessage,
+							{
+								reply_parameters: { message_id: targetMsgId },
+								parse_mode: "HTML", // Enable HTML formatting for the summary
+							},
+						);
+						storeBotReplyMapping(targetMsgId, ctx.chat.id, sentMsg.message_id);
+					} catch (e) {
+						console.error("Error sending reply for sed command chain:", e);
+						if (
+							e instanceof GrammyError &&
+							e.description.includes("Flood control")
+						) {
+							console.warn("Flood control hit when sending sed reply chain.");
+						} else {
+							// Attempt to send a simpler message if the formatted one failed
+							try {
+								await ctx.reply(
+									"Failed to send detailed substitution result due to formatting or size.",
+								);
+							} catch (e2) {
+								console.error("Failed to send fallback message:", e2);
+							}
+						}
 					}
 				} else {
+					// No target found for the chain
 					await ctx.reply("Could not find a matching message to substitute.");
 				}
 			}
@@ -350,13 +444,20 @@ bot.on("message", async (ctx) => {
 
 bot.on("edited_message", async (ctx) => {
 	try {
-		if (ctx.editedMessage?.text && SED_PATTERN.test(ctx.editedMessage.text)) {
-			const match = ctx.editedMessage.text.match(SED_PATTERN);
-			if (match) {
+		if (ctx.editedMessage?.text && ctx.editedMessage.text.includes("s/")) {
+			const lines = ctx.editedMessage.text.split("\n");
+			const sedCommands = lines.filter((line) => SED_PATTERN.test(line.trim()));
+
+			if (sedCommands.length > 0) {
+				const firstMatch = sedCommands[0].match(SED_PATTERN);
+				if (!firstMatch) {
+					return;
+				}
+
 				// Pass the edited message ID to exclude it from history lookup during edits
 				const { targetMsgText, targetMsgId } = await findTargetMessage(
 					ctx,
-					match,
+					firstMatch,
 					ctx.editedMessage.message_id,
 				);
 
@@ -369,175 +470,50 @@ bot.on("edited_message", async (ctx) => {
 				}
 
 				if (targetMsgText && targetMsgId) {
-					const substitutionResult = await applySubstitutionWithTimeout(
-						targetMsgText,
-						match,
-						60000,
-					); // 60 second timeout
+					// --- Process the chain of commands (similar to message handler) ---
+					let currentText = targetMsgText;
+					let allResults: {
+						pattern: string;
+						result: string;
+						matched: boolean;
+					}[] = [];
+					let chainErrored = false;
+					let chainTimedOut = false;
 
-					if (substitutionResult) {
-						// Only proceed if substitution didn't time out or fail
-						const { result, matched } = substitutionResult;
+					const commandsToProcess = sedCommands.slice(0, MAX_CHAIN_LENGTH);
 
-						if (matched) {
-							const previousBotReplyId = getBotReplyMessageId(
-								targetMsgId,
-								ctx.chat.id,
-							);
-							if (previousBotReplyId) {
-								try {
-									await ctx.api.editMessageText(
-										ctx.chat.id,
-										previousBotReplyId,
-										result,
-									);
-									storeBotReplyMapping(
-										targetMsgId,
-										ctx.chat.id,
-										previousBotReplyId,
-									);
-									console.log(
-										`Edited bot reply ${previousBotReplyId} for target ${targetMsgId}`,
-									);
-								} catch (e) {
-									// Check for "message is not modified" error
-									if (
-										e instanceof GrammyError &&
-										e.description.includes("message is not modified")
-									) {
-										console.log(
-											`Bot reply ${previousBotReplyId} for target ${targetMsgId} was not modified, ignoring.`,
-										);
-										// Do nothing, just return
-										return;
-									} else {
-										console.error(
-											"Error editing bot reply, sending new one:",
-											e,
-										);
-										try {
-											const newReplyMsg = await ctx.api.sendMessage(
-												ctx.chat.id,
-												result,
-												{
-													reply_parameters: { message_id: targetMsgId },
-												},
-											);
-											storeBotReplyMapping(
-												targetMsgId,
-												ctx.chat.id,
-												newReplyMsg.message_id,
-											);
-										} catch (e2) {
-											console.error(
-												"Failed to send new reply after edit failed:",
-												e2,
-											);
-										}
-									}
-								}
-							} else {
-								console.warn(
-									`No previous bot reply found for target ${targetMsgId} during edit, sending new.`,
-								);
-								try {
-									const newReplyMsg = await ctx.api.sendMessage(
-										ctx.chat.id,
-										result,
-										{
-											reply_parameters: { message_id: targetMsgId },
-										},
-									);
-									storeBotReplyMapping(
-										targetMsgId,
-										ctx.chat.id,
-										newReplyMsg.message_id,
-									);
-								} catch (e) {
-									console.error(
-										"Failed to send new reply during edit handling:",
-										e,
-									);
-								}
-							}
-						} else {
-							// No match after edit
-							const previousBotReplyId = getBotReplyMessageId(
-								targetMsgId,
-								ctx.chat.id,
-							);
-							if (previousBotReplyId) {
-								try {
-									await ctx.api.editMessageText(
-										ctx.chat.id,
-										previousBotReplyId,
-										"(No match for edited pattern)",
-									);
-									storeBotReplyMapping(
-										targetMsgId,
-										ctx.chat.id,
-										previousBotReplyId,
-									);
-								} catch (e) {
-									// Check for "message is not modified" error
-									if (
-										e instanceof GrammyError &&
-										e.description.includes("message is not modified")
-									) {
-										console.log(
-											`Bot reply ${previousBotReplyId} (no match) for target ${targetMsgId} was not modified, ignoring.`,
-										);
-										return; // Do nothing, just return
-									} else {
-										console.error(
-											"Error editing bot reply for no-match case:",
-											e,
-										);
-										try {
-											const newReplyMsg = await ctx.api.sendMessage(
-												ctx.chat.id,
-												"(No match for edited pattern)",
-												{
-													reply_parameters: { message_id: targetMsgId },
-												},
-											);
-											storeBotReplyMapping(
-												targetMsgId,
-												ctx.chat.id,
-												newReplyMsg.message_id,
-											);
-										} catch (e2) {
-											console.error(
-												"Failed to send new reply for no-match case:",
-												e2,
-											);
-										}
-									}
-								}
-							} else {
-								try {
-									const newReplyMsg = await ctx.api.sendMessage(
-										ctx.chat.id,
-										"(No match for edited pattern)",
-										{
-											reply_parameters: { message_id: targetMsgId },
-										},
-									);
-									storeBotReplyMapping(
-										targetMsgId,
-										ctx.chat.id,
-										newReplyMsg.message_id,
-									);
-								} catch (e) {
-									console.error(
-										"Failed to send new reply for no-match case (no previous):",
-										e,
-									);
-								}
-							}
+					for (const cmdLine of commandsToProcess) {
+						const match = cmdLine.match(SED_PATTERN);
+						if (!match) continue;
+
+						const substitutionResult = await applySubstitutionWithTimeout(
+							currentText,
+							match,
+							60000,
+						);
+
+						if (substitutionResult === null) {
+							chainTimedOut = true;
+							break;
 						}
-					} else {
-						// Timeout during edit
+
+						const { result, matched } = substitutionResult;
+						allResults.push({ pattern: cmdLine, result, matched });
+						currentText = result;
+
+						if (currentText.length > MAX_MESSAGE_LENGTH) {
+							break;
+						}
+					}
+
+					if (chainErrored) {
+						// Handle error during edit - maybe send a new message or edit an existing bot reply if possible
+						// For simplicity, let's just log and potentially send a new message
+						console.error("Error occurred during sed chain edit processing.");
+						return; // Or handle error state in mapping if needed
+					}
+					if (chainTimedOut) {
+						// Handle timeout during edit
 						const previousBotReplyId = getBotReplyMessageId(
 							targetMsgId,
 							ctx.chat.id,
@@ -547,7 +523,7 @@ bot.on("edited_message", async (ctx) => {
 								await ctx.api.editMessageText(
 									ctx.chat.id,
 									previousBotReplyId,
-									"(Substitution timed out)",
+									"(Substitution chain timed out)",
 								);
 								storeBotReplyMapping(
 									targetMsgId,
@@ -555,7 +531,6 @@ bot.on("edited_message", async (ctx) => {
 									previousBotReplyId,
 								);
 							} catch (e) {
-								// Check for "message is not modified" error
 								if (
 									e instanceof GrammyError &&
 									e.description.includes("message is not modified")
@@ -563,13 +538,13 @@ bot.on("edited_message", async (ctx) => {
 									console.log(
 										`Bot reply ${previousBotReplyId} (timeout) for target ${targetMsgId} was not modified, ignoring.`,
 									);
-									return; // Do nothing, just return
+									return;
 								} else {
 									console.error("Error editing bot reply for timeout case:", e);
 									try {
 										const newReplyMsg = await ctx.api.sendMessage(
 											ctx.chat.id,
-											"(Substitution timed out)",
+											"(Substitution chain timed out)",
 											{
 												reply_parameters: { message_id: targetMsgId },
 											},
@@ -591,7 +566,7 @@ bot.on("edited_message", async (ctx) => {
 							try {
 								const newReplyMsg = await ctx.api.sendMessage(
 									ctx.chat.id,
-									"(Substitution timed out)",
+									"(Substitution chain timed out)",
 									{
 										reply_parameters: { message_id: targetMsgId },
 									},
@@ -608,9 +583,192 @@ bot.on("edited_message", async (ctx) => {
 								);
 							}
 						}
+						return; // Stop further processing after timeout
+					}
+
+					// If no commands matched anything
+					if (allResults.every((r) => !r.matched)) {
+						const previousBotReplyId = getBotReplyMessageId(
+							targetMsgId,
+							ctx.chat.id,
+						);
+						if (previousBotReplyId) {
+							try {
+								await ctx.api.editMessageText(
+									ctx.chat.id,
+									previousBotReplyId,
+									"(No match for edited pattern chain)",
+								);
+								storeBotReplyMapping(
+									targetMsgId,
+									ctx.chat.id,
+									previousBotReplyId,
+								);
+							} catch (e) {
+								if (
+									e instanceof GrammyError &&
+									e.description.includes("message is not modified")
+								) {
+									console.log(
+										`Bot reply ${previousBotReplyId} (no match) for target ${targetMsgId} was not modified, ignoring.`,
+									);
+									return;
+								} else {
+									console.error(
+										"Error editing bot reply for no-match case:",
+										e,
+									);
+									try {
+										const newReplyMsg = await ctx.api.sendMessage(
+											ctx.chat.id,
+											"(No match for edited pattern chain)",
+											{
+												reply_parameters: { message_id: targetMsgId },
+											},
+										);
+										storeBotReplyMapping(
+											targetMsgId,
+											ctx.chat.id,
+											newReplyMsg.message_id,
+										);
+									} catch (e2) {
+										console.error(
+											"Failed to send new reply for no-match case:",
+											e2,
+										);
+									}
+								}
+							}
+						} else {
+							try {
+								const newReplyMsg = await ctx.api.sendMessage(
+									ctx.chat.id,
+									"(No match for edited pattern chain)",
+									{
+										reply_parameters: { message_id: targetMsgId },
+									},
+								);
+								storeBotReplyMapping(
+									targetMsgId,
+									ctx.chat.id,
+									newReplyMsg.message_id,
+								);
+							} catch (e) {
+								console.error(
+									"Failed to send new reply for no-match case (no previous):",
+									e,
+								);
+							}
+						}
+						return; // Stop further processing after no match
+					}
+
+					// Build the final message for the edit
+					let finalMessage = currentText;
+
+					if (allResults.length > 1) {
+						let summary = "\n\n";
+						for (let i = 0; i < allResults.length; i++) {
+							summary += `<b>Step ${i + 1}:</b> <code>${allResults[i].pattern}</code>\n`;
+							if (allResults[i].matched) {
+								summary += `-> <pre>${allResults[i].result}</pre>\n`;
+							} else {
+								summary += `-> (No match)\n`;
+							}
+						}
+
+						if ((finalMessage + summary).length <= MAX_MESSAGE_LENGTH) {
+							finalMessage += summary;
+						} else {
+							finalMessage += `\n\n(Chain summary omitted due to length)`;
+						}
+					} else if (allResults.length === 1 && !allResults[0].matched) {
+						finalMessage = "(No match for edited pattern)";
+					}
+
+					// --- Handle editing or sending the new message ---
+					const previousBotReplyId = getBotReplyMessageId(
+						targetMsgId,
+						ctx.chat.id,
+					);
+					if (previousBotReplyId) {
+						try {
+							await ctx.api.editMessageText(
+								ctx.chat.id,
+								previousBotReplyId,
+								finalMessage,
+							);
+							storeBotReplyMapping(
+								targetMsgId,
+								ctx.chat.id,
+								previousBotReplyId,
+							);
+							console.log(
+								`Edited bot reply ${previousBotReplyId} for target ${targetMsgId} (chain)`,
+							);
+						} catch (e) {
+							if (
+								e instanceof GrammyError &&
+								e.description.includes("message is not modified")
+							) {
+								console.log(
+									`Bot reply ${previousBotReplyId} for target ${targetMsgId} (chain) was not modified, ignoring.`,
+								);
+								return;
+							} else {
+								console.error(
+									"Error editing bot reply (chain), sending new one:",
+									e,
+								);
+								try {
+									const newReplyMsg = await ctx.api.sendMessage(
+										ctx.chat.id,
+										finalMessage,
+										{
+											reply_parameters: { message_id: targetMsgId },
+										},
+									);
+									storeBotReplyMapping(
+										targetMsgId,
+										ctx.chat.id,
+										newReplyMsg.message_id,
+									);
+								} catch (e2) {
+									console.error(
+										"Failed to send new reply after edit failed (chain):",
+										e2,
+									);
+								}
+							}
+						}
+					} else {
+						console.warn(
+							`No previous bot reply found for target ${targetMsgId} during edit (chain), sending new.`,
+						);
+						try {
+							const newReplyMsg = await ctx.api.sendMessage(
+								ctx.chat.id,
+								finalMessage,
+								{
+									reply_parameters: { message_id: targetMsgId },
+								},
+							);
+							storeBotReplyMapping(
+								targetMsgId,
+								ctx.chat.id,
+								newReplyMsg.message_id,
+							);
+						} catch (e) {
+							console.error(
+								"Failed to send new reply during edit handling (chain):",
+								e,
+							);
+						}
 					}
 				} else {
-					console.log("Edited sed command no longer finds a target message.");
+					console.log(
+						"Edited sed command chain no longer finds a target message.",
+					);
 				}
 			}
 		} else if (ctx.editedMessage) {
