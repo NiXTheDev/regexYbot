@@ -220,7 +220,12 @@ function applySubstitutionWithTimeout(
 ): Promise<{ result: string; matched: boolean } | null> {
 	return new Promise((resolve, reject) => {
 		const fr = match[1].replace(/\\\//g, "/");
-		const to = match[2].replace(/\\\//g, "/").replace(/\$0/g, "$&");
+		// --- NEW: Convert \1, \2, etc. in the replacement string to $1, $2, etc. ---
+		let rawTo = match[2].replace(/\\\//g, "/");
+		// Use a regex to find \ followed by one or more digits
+		// Replace \N with $N
+		const convertedTo = rawTo.replace(/\\(\d+)/g, '$$$1'); // '$$$1' results in '$' + '$1' which is the literal '$1'
+		// --- END NEW ---
 		const flags = getRegexFlags(match[3]);
 
 		const globalFlag = flags.includes("g") ? "g" : "";
@@ -235,7 +240,8 @@ function applySubstitutionWithTimeout(
 
 		try {
 			// Execute the potentially slow regex
-			const result = text.replace(regex, to);
+			// Use the converted replacement string
+			const result = text.replace(regex, convertedTo);
 			// Clear timeout if substitution finished quickly
 			clearTimeout(timeoutId);
 			resolve({ result, matched: result !== text });
