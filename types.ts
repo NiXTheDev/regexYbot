@@ -1,5 +1,3 @@
-// types.ts
-
 // Define the available log levels in order of severity
 export type LogLevel = "none" | "debug" | "info" | "warn" | "error" | "fatal";
 

@@ -1,5 +1,4 @@
-// logger.ts
-import { LogLevel, LOG_LEVELS } from "./types";
+import { LOG_LEVELS, LogLevel } from "./types";
 
 // Determine the global log level from environment variables
 const getGlobalLogLevel = (): LogLevel => {

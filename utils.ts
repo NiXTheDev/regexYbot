@@ -1,8 +1,9 @@
 // utils.ts
 import { LogLevel } from "./types";
 
-// Regex for sed command
-export const SED_PATTERN = /^s\/((?:\\.|[^\/])+?)\/((?:\\.|[^\/])*?)(\/.*)?$/;
+// Regex for sed command, reverting to the original non-greedy version.
+export const SED_PATTERN =
+	/^s\/((?:\\.|[^\/])+?)\/((?:\\.|[^\/])*?)(?:\/([^]*))?$/;
 
 // Helper function to get regex flags from a sed command
 export function getRegexFlags(flagsMatch: string | undefined): {
@@ -11,7 +12,7 @@ export function getRegexFlags(flagsMatch: string | undefined): {
 } {
 	if (!flagsMatch) return { flags: "", originalFlags: undefined };
 	const originalFlags = flagsMatch;
-	const rawFlags = flagsMatch.substring(1);
+	const rawFlags = flagsMatch;
 	const standardFlagChars = ["g", "i", "m", "s", "u", "y"];
 	const flags = Array.from(new Set(rawFlags))
 		.filter((char) => standardFlagChars.includes(char.toLowerCase()))

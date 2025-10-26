@@ -1,8 +1,7 @@
-// hellspawn.ts
 declare var self: Worker;
 import { Logger } from "./logger";
+import { performance } from "perf_hooks";
 import { TaskMessage, ResultMessage } from "./types"; // Import from types.ts
-import { getRegexFlags } from "./utils"; // Import from types.ts
 
 function processTask(task: TaskMessage, logger: Logger): ResultMessage {
 	logger.debug(
@@ -13,13 +12,11 @@ function processTask(task: TaskMessage, logger: Logger): ResultMessage {
 	let currentText = initialText;
 
 	try {
-		for (const cmd of commands) {
-			logger.debug(
-				`Applying: /${cmd.pattern}/${cmd.flags}/${cmd.replacement}/`,
-			);
-			const regex = new RegExp(cmd.pattern, cmd.flags);
-			currentText = currentText.replace(regex, cmd.replacement);
-		}
+		// We're now only processing a single command
+		const cmd = commands[0];
+		logger.debug(`Applying: /${cmd.pattern}/${cmd.flags}/${cmd.replacement}/`);
+		const regex = new RegExp(cmd.pattern, cmd.flags);
+		currentText = currentText.replace(regex, cmd.replacement);
 
 		let performanceMs: number | null = null;
 		if (includePerformance && startTime !== undefined) {

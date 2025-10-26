@@ -16,8 +16,5 @@ RUN bun install --frozen-lockfile
 # Copy the rest of the application code
 COPY . .
 
-# Expose any ports the app runs on, if applicable (e.g., for webhooks)
-# EXPOSE 3000
-
 # Run the application using bun
-CMD ["bun", "run", "index.ts"]
+CMD ["bun", "run", "main"]

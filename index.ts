@@ -1,26 +1,24 @@
-// index.ts
-import { Bot, Context } from "grammy";
-import { run } from "@grammyjs/runner";
 import {
-	commands,
 	CommandGroup,
+	commands,
 	type CommandsFlavor,
 } from "@grammyjs/commands";
+import { run } from "@grammyjs/runner";
 import { sql, SQL } from "bun";
-import { GrammyError } from "grammy";
+import { Bot, Context, GrammyError } from "grammy";
 import { Logger } from "./logger";
+import { ResultMessage, SedCommand, TaskMessage } from "./types";
 import {
-	SED_PATTERN,
-	getRegexFlags,
 	escapeForMarkdownV2AndBackslashes,
+	getRegexFlags,
+	SED_PATTERN,
 } from "./utils";
-import { SedCommand, TaskMessage, ResultMessage } from "./types";
 
 // --- Configuration ---
 const token = process.env.TOKEN;
 if (!token) {
-	const logger = new Logger("INIT");
-	logger.fatal("TOKEN environment variable not set.");
+	const initLogger = new Logger("INIT");
+	initLogger.fatal("TOKEN environment variable not set.");
 	process.exit(1);
 }
 const base = (process.env.BASE_URL || "https://api.telegram.org").trim();
@@ -282,7 +280,7 @@ async function sendOrEditReply(
 						logger.debug("Edit failed: message not modified, ignoring.");
 						return;
 					}
-          logger.error(`${e}\nError editing bot reply, sending new one`);
+					logger.error(`${e}\nError editing bot reply, sending new one`);
 				}
 			}
 		}
@@ -318,6 +316,30 @@ async function sendOrEditReply(
 	}
 }
 
+// --- FINAL: Simple, Robust Line-by-Line Parser ---
+function parseSedCommands(text: string): string[] {
+	const lines = text.split("\n");
+	const commands: string[] = [];
+	let currentCommand = "";
+
+	for (const line of lines) {
+		if (line.trim().startsWith("s/")) {
+			if (currentCommand) {
+				commands.push(currentCommand.trim());
+			}
+			currentCommand = line;
+		} else if (currentCommand) {
+			currentCommand += "\n" + line;
+		}
+	}
+
+	if (currentCommand) {
+		commands.push(currentCommand.trim());
+	}
+
+	return commands;
+}
+
 async function handleSedCommand(
 	ctx: MyContext,
 	sedCommands: string[],
@@ -325,61 +347,84 @@ async function handleSedCommand(
 	targetMsgId: number,
 	isEdit: boolean,
 ) {
-	logger.debug(`Handling sed command for targetMsgId: ${targetMsgId}`);
+	logger.debug(
+		`Handling ${sedCommands.length} sed command(s) for targetMsgId: ${targetMsgId}`,
+	);
+	logger.debug(`Commands to execute: ${JSON.stringify(sedCommands)}`);
+
 	const hasPerformanceFlag = sedCommands.some((cmd) => {
 		const match = cmd.match(SED_PATTERN);
 		return match
 			? getRegexFlags(match[3]).originalFlags?.toLowerCase().includes("p")
 			: false;
 	});
-	const commandsForWorker: SedCommand[] = sedCommands
-		.slice(0, MAX_CHAIN_LENGTH)
-		.map((cmdLine) => {
-			const match = cmdLine.match(SED_PATTERN);
-			if (!match) return null;
-			const fr = match[1].replace(/\\\//g, "/");
-			const processedTo = match[2]
-				.replace(/\\\//g, "/")
-				.replace(/\\(\d+)/g, "$$$1");
-			const { flags } = getRegexFlags(match[3]);
-			return { pattern: fr, flags, replacement: processedTo };
-		})
-		.filter(Boolean) as SedCommand[];
 
-	try {
-		const task: TaskMessage = {
-			initialText: targetMsgText,
-			commands: commandsForWorker,
-			includePerformance: hasPerformanceFlag,
+	const startTime = hasPerformanceFlag ? performance.now() : undefined;
+	let currentText = targetMsgText;
+
+	for (const commandString of sedCommands.slice(0, MAX_CHAIN_LENGTH)) {
+		const match = commandString.match(SED_PATTERN);
+		if (!match) continue;
+
+		const fr = match[1].replace(/\\\//g, "/");
+		const processedTo = match[2]
+			.replace(/\\\//g, "/")
+			.replace(/\\(\d+)/g, "$$$1")
+			.replace(/\\n/g, "\n")
+			.replace(/\\t/g, "\t");
+		const { flags } = getRegexFlags(match[3]);
+		const commandForWorker: SedCommand = {
+			pattern: fr,
+			flags,
+			replacement: processedTo,
 		};
-		logger.debug("Submitting task to worker pool.");
-		const result = await workerPool.run(task);
-		logger.debug("Received result from worker pool");
-		if (result.error) {
-			await ctx.reply(`Error during substitution: ${result.error}`);
+
+		logger.debug(
+			`Executing command: pattern="${commandForWorker.pattern}", flags="${commandForWorker.flags}", replacement="${commandForWorker.replacement}"`,
+		);
+
+		try {
+			const task: TaskMessage = {
+				initialText: currentText,
+				commands: [commandForWorker],
+				includePerformance: hasPerformanceFlag,
+			};
+			const result = await workerPool.run(task);
+			if (result.error) {
+				await ctx.reply(`Error during substitution: ${result.error}`);
+				return;
+			}
+			currentText = result.result;
+			logger.debug(`Command result. New text length: ${currentText.length}`);
+		} catch (error: any) {
+			logger.error(error, "Worker pool task failed");
+			await ctx.reply("The substitution process failed.");
 			return;
 		}
-		let finalMessage = result.result.slice(0, MAX_MESSAGE_LENGTH);
-		if (result.performanceMs !== null) {
-			const performanceInfo = ` (⏱️ ${result.performanceMs.toFixed(2)}ms)`;
-			if (finalMessage.length + performanceInfo.length > MAX_MESSAGE_LENGTH) {
-				finalMessage =
-					finalMessage.slice(0, MAX_MESSAGE_LENGTH - performanceInfo.length) +
-					performanceInfo;
-			} else {
-				finalMessage += performanceInfo;
-			}
-		}
-		await sendOrEditReply(
-			ctx,
-			targetMsgId,
-			escapeForMarkdownV2AndBackslashes(finalMessage),
-			isEdit,
-		);
-	} catch (error: any) {
-		logger.error(error, "Worker pool task failed");
-		await ctx.reply("The substitution process failed.");
 	}
+
+	let totalPerformanceMs: number | null = null;
+	if (hasPerformanceFlag && startTime !== undefined) {
+		totalPerformanceMs = performance.now() - startTime;
+	}
+
+	let finalMessage = currentText.slice(0, MAX_MESSAGE_LENGTH);
+	if (totalPerformanceMs !== null) {
+		const performanceInfo = ` (⏱️ ${totalPerformanceMs.toFixed(2)}ms)`;
+		if (finalMessage.length + performanceInfo.length > MAX_MESSAGE_LENGTH) {
+			finalMessage =
+				finalMessage.slice(0, MAX_MESSAGE_LENGTH - performanceInfo.length) +
+				performanceInfo;
+		} else {
+			finalMessage += performanceInfo;
+		}
+	}
+	await sendOrEditReply(
+		ctx,
+		targetMsgId,
+		escapeForMarkdownV2AndBackslashes(finalMessage),
+		isEdit,
+	);
 }
 
 // --- Command Group ---
@@ -394,7 +439,9 @@ myCommands.command("privacy", "Show privacy information", async (ctx) => {
 });
 myCommands.command("start", "Get a greeting message", async (ctx) => {
 	await ctx.reply(
-		"Hello! I am a regex bot. Use s/find/replace/flags to substitute text in messages. You can chain multiple commands, one per line.\n\n" +
+		"Hello! I am a regex bot. Use s/find/replace/flags to substitute text in messages. " +
+			"The replacement text can span multiple lines or use escape sequences like `\\n`. " +
+			"You can also chain multiple commands, one per line.\n\n" +
 			"Special flags:\n" +
 			"- `p`: Show performance timing for the entire command chain (e.g., `s/pattern/repl/p`)\n" +
 			"Use `\\N` in replacements for captured groups (e.g., `\\1`).",
@@ -415,9 +462,7 @@ bot.on("message", async (ctx) => {
 		);
 	}
 	if (ctx.message?.text?.includes("s/")) {
-		const sedCommands = ctx.message.text
-			.split("\n")
-			.filter((line) => SED_PATTERN.test(line.trim()));
+		const sedCommands = parseSedCommands(ctx.message.text);
 		logger.debug(`Found ${sedCommands.length} sed command(s).`);
 		if (sedCommands.length === 0) return;
 		const firstMatch = sedCommands[0].match(SED_PATTERN);
@@ -458,9 +503,7 @@ bot.on("edited_message", async (ctx) => {
 		);
 	}
 	if (ctx.editedMessage?.text?.includes("s/")) {
-		const sedCommands = ctx.editedMessage.text
-			.split("\n")
-			.filter((line) => SED_PATTERN.test(line.trim()));
+		const sedCommands = parseSedCommands(ctx.editedMessage.text);
 		logger.debug(
 			`Found ${sedCommands.length} sed command(s) in edited message.`,
 		);
