@@ -17,6 +17,7 @@
 	"scripts": {
 		"dev": "bun run --watch index.ts",
 		"main": "bun index.ts",
+		"test": "bun test",
 		"lint": "eslint . --ext .ts",
 		"format": "prettier --write ."
 	}
