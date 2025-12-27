@@ -49,14 +49,14 @@ jobs:
             GHCR_TAGS="ghcr.io/${REPO}:latest,ghcr.io/${REPO}:${COMMIT},ghcr.io/${REPO}:${VERSION}"
 
             CURRENT="$BASE_VERSION"
-            PREV="$BASE_VERSION"
-            while [ "$CURRENT" != "$PREV" ]; do
+            while true; do
               PREV="$CURRENT"
               CURRENT=$(echo "$CURRENT" | sed 's/\.[^.]*$//')
-              if [ -n "$CURRENT" ]; then
-                DOCKER_TAGS="${DOCKER_TAGS},docker.io/${USERNAME}/regexybot:${CURRENT}"
-                GHCR_TAGS="${GHCR_TAGS},ghcr.io/${REPO}:${CURRENT}"
+              if [ "$CURRENT" = "$PREV" ] || [ -z "$CURRENT" ]; then
+                break
               fi
+              DOCKER_TAGS="${DOCKER_TAGS},docker.io/${USERNAME}/regexybot:${CURRENT}"
+              GHCR_TAGS="${GHCR_TAGS},ghcr.io/${REPO}:${CURRENT}"
             done
 
             if [ -n "$PRE_RELEASE" ]; then
