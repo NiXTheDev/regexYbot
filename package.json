@@ -10,6 +10,8 @@
 	},
 	"devDependencies": {
 		"@types/bun": "1.3.1",
+		"@typescript-eslint/eslint-plugin": "^7.0.0",
+		"@typescript-eslint/parser": "^7.0.0",
 		"eslint": "^9.38.0",
 		"prettier": "^3.6.2",
 		"typescript": "^5.0.0"
@@ -18,7 +20,7 @@
 		"dev": "bun run --watch index.ts",
 		"main": "bun index.ts",
 		"test": "bun test",
-		"lint": "eslint . --ext .ts",
+		"lint": "bun --bun tsc --noEmit && eslint .",
 		"format": "prettier --write ."
 	}
 }
