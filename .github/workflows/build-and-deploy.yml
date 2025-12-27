@@ -53,9 +53,9 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
           push: true
           tags: |
-            docker.io/${DOCKER_USERNAME}/regexybot:latest
-            docker.io/${DOCKER_USERNAME}/regexybot:${{ steps.version.outputs.version }}
-            docker.io/${DOCKER_USERNAME}/regexybot:${{ steps.version.outputs.version }}-${{ steps.version.outputs.commit }}
+            docker.io/${{ env.DOCKER_USERNAME }}/regexybot:latest
+            docker.io/${{ env.DOCKER_USERNAME }}/regexybot:${{ steps.version.outputs.version }}
+            docker.io/${{ env.DOCKER_USERNAME }}/regexybot:${{ steps.version.outputs.version }}-${{ steps.version.outputs.commit }}
             ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}-${{ steps.version.outputs.commit }}
