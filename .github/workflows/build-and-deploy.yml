@@ -49,11 +49,12 @@ jobs:
             TAGS+=("$VERSION")
 
             CURRENT="$BASE_VERSION"
-            while [ -n "$CURRENT" ] && [ "$CURRENT" != "$BASE_VERSION" ]; do
-              if [ ! "${TAGS[*]}" =~ "$CURRENT" ]; then
-                TAGS+=("$CURRENT")
-              fi
+            while true; do
               CURRENT=$(echo "$CURRENT" | sed 's/\.[^.]*$//')
+              if [ -z "$CURRENT" ]; then
+                break
+              fi
+              TAGS+=("$CURRENT")
             done
 
             if [ -n "$PRE_RELEASE" ]; then
