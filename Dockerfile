@@ -10,8 +10,8 @@ RUN bun install --frozen-lockfile --production
 
 COPY . .
 
-RUN addgroup --system --gid 1001 bun && \
-    adduser --system --uid 1001 --gid 1001 bun && \
+RUN groupadd -r -g 1001 bun && \
+    useradd -r -u 1001 -g bun bun && \
     chown -R bun:bun /app
 
 USER bun
