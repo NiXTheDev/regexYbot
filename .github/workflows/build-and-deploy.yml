@@ -29,16 +29,20 @@ jobs:
       - name: Generate tags
         id: tags
         run: |
-          VERSION='${{ steps.version.outputs.version }}'
-          COMMIT='${{ steps.version.outputs.commit }}'
-          USERNAME='${{ secrets.DOCKER_USERNAME }}'
-          REPO='${{ github.repository }}'
+          VERSION="${{ steps.version.outputs.version }}"
+          COMMIT="${{ steps.version.outputs.commit }}"
+          USERNAME="${{ secrets.DOCKER_USERNAME }}"
+          REPO="${{ github.repository }}"
           REPO=$(echo "$REPO" | tr '[:upper:]' '[:lower:]')
+
+          echo "Version: $VERSION"
 
           # Parse version components (X.Y.Z)
           if [ "$VERSION" != "latest" ]; then
             MAJOR=$(echo "$VERSION" | cut -d '.' -f 1)
             MAJOR_MINOR=$(echo "$VERSION" | cut -d '.' -f 1,2)
+            echo "Major: $MAJOR"
+            echo "Major.Minor: $MAJOR_MINOR"
           fi
 
           # Build Docker Hub tags
@@ -58,6 +62,9 @@ jobs:
             GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${MAJOR}"
             GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${COMMIT}"
           fi
+
+          echo "Docker Tags: $DOCKER_TAGS"
+          echo "GHCR Tags: $GHCR_TAGS"
 
           # Combine all tags
           ALL_TAGS="$DOCKER_TAGS,$GHCR_TAGS"
