@@ -37,30 +37,51 @@ jobs:
 
           echo "Version: $VERSION"
 
-          # Parse version components (X.Y.Z)
           if [ "$VERSION" != "latest" ]; then
-            MAJOR=$(echo "$VERSION" | cut -d '.' -f 1)
-            MAJOR_MINOR=$(echo "$VERSION" | cut -d '.' -f 1,2)
-            echo "Major: $MAJOR"
-            echo "Major.Minor: $MAJOR_MINOR"
-          fi
+            # Split version into base and pre-release suffix
+            PRE_RELEASE=""
+            BASE_VERSION="$VERSION"
+            if [[ "$VERSION" == *"-"* ]]; then
+              PRE_RELEASE="${VERSION##*-}"
+              BASE_VERSION="${VERSION%-*}"
+            fi
+            echo "Base version: $BASE_VERSION"
+            echo "Pre-release: $PRE_RELEASE"
 
-          # Build Docker Hub tags
-          DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest"
-          if [ "$VERSION" != "latest" ]; then
-            DOCKER_TAGS="$DOCKER_TAGS,docker.io/${USERNAME}/regexybot:${VERSION}"
-            DOCKER_TAGS="$DOCKER_TAGS,docker.io/${USERNAME}/regexybot:${MAJOR_MINOR}"
-            DOCKER_TAGS="$DOCKER_TAGS,docker.io/${USERNAME}/regexybot:${MAJOR}"
-            DOCKER_TAGS="$DOCKER_TAGS,docker.io/${USERNAME}/regexybot:${COMMIT}"
-          fi
-
-          # Build GHCR tags
-          GHCR_TAGS="ghcr.io/${REPO}:latest"
-          if [ "$VERSION" != "latest" ]; then
-            GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${VERSION}"
-            GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${MAJOR_MINOR}"
-            GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${MAJOR}"
-            GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${COMMIT}"
+            # Generate incremental version tags (remove parts from right)
+            TAGS=()
+            TAGS+=("$VERSION")  # Full version with pre-release if present
+            
+            CURRENT="$BASE_VERSION"
+            while [ -n "$CURRENT" ] && [ "$CURRENT" != "$BASE_VERSION" ]; do
+              if [ ! "${TAGS[*]}" =~ "$CURRENT" ]; then
+                TAGS+=("$CURRENT")
+              fi
+              CURRENT=$(echo "$CURRENT" | sed 's/\.[^.]*$//')
+            done
+            
+            # Add pre-release tag without dash if exists
+            if [ -n "$PRE_RELEASE" ]; then
+              TAGS+=("$PRE_RELEASE")
+            fi
+            
+            echo "Generated tags:"
+            printf '%s\n' "${TAGS[@]}"
+            
+            # Build Docker Hub tags
+            DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:${COMMIT}"
+            for TAG in "${TAGS[@]}"; do
+              DOCKER_TAGS="$DOCKER_TAGS,docker.io/${USERNAME}/regexybot:${TAG}"
+            done
+            
+            # Build GHCR tags
+            GHCR_TAGS="ghcr.io/${REPO}:latest,ghcr.io/${REPO}:${COMMIT}"
+            for TAG in "${TAGS[@]}"; do
+              GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${TAG}"
+            fi
+          else
+            DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:${COMMIT}"
+            GHCR_TAGS="ghcr.io/${REPO}:latest,ghcr.io/${REPO}:${COMMIT}"
           fi
 
           echo "Docker Tags: $DOCKER_TAGS"
