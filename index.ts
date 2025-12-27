@@ -30,6 +30,7 @@ const {
 	WORKER_POOL_SIZE,
 	MAX_HISTORY_PER_CHAT,
 	HISTORY_QUERY_LIMIT,
+	WORKER_TIMEOUT_MS,
 } = CONFIG;
 
 // --- Type Definitions ---
@@ -178,24 +179,44 @@ class WorkerPool {
 			reject: (reason?: unknown) => void;
 		}
 	>();
+	private timeouts = new Map<Worker, NodeJS.Timeout>();
+	private workerScript: string;
 
 	constructor(poolSize: number, workerScript: string) {
+		this.workerScript = workerScript;
 		logger.info(`Initializing worker pool with size ${poolSize}...`);
 		this.workers = Array.from({ length: poolSize }, (_, i) => {
 			logger.debug(
 				`Creating worker ${i + 1}/${poolSize} from script: ${workerScript}`,
 			);
-			const worker = new Worker(workerScript);
-			worker.onmessage = (event) =>
-				this.handleWorkerMessage(worker, event.data);
-			worker.onerror = (error) => this.handleWorkerError(worker, error);
-			return worker;
+			return this.createWorker(i + 1, poolSize);
 		});
 		logger.info("Worker pool initialized.");
 	}
 
+	private createWorker(index: number, total: number): Worker {
+		const worker = new Worker(this.workerScript);
+		worker.onmessage = (event) => this.handleWorkerMessage(worker, event.data);
+		worker.onerror = (error) => this.handleWorkerError(worker, error);
+		return worker;
+	}
+
+	private replaceWorker(deadWorker: Worker): void {
+		const index = this.workers.indexOf(deadWorker);
+		if (index !== -1) {
+			logger.info(`Replacing worker ${index + 1}/${this.workers.length}...`);
+			const newWorker = this.createWorker(index + 1, this.workers.length);
+			this.workers[index] = newWorker;
+		}
+	}
+
 	private handleWorkerMessage(worker: Worker, result: ResultMessage) {
 		logger.debug("Received result from a worker.");
+		const timeout = this.timeouts.get(worker);
+		if (timeout) {
+			clearTimeout(timeout);
+			this.timeouts.delete(worker);
+		}
 		const pending = this.pendingTasks.get(worker);
 		if (pending) {
 			logger.debug("Resolving promise for the completed task.");
@@ -211,11 +232,36 @@ class WorkerPool {
 
 	private handleWorkerError(worker: Worker, error: ErrorEvent) {
 		logger.error(error.error, "WORKER ERROR");
+		const timeout = this.timeouts.get(worker);
+		if (timeout) {
+			clearTimeout(timeout);
+			this.timeouts.delete(worker);
+		}
 		const pending = this.pendingTasks.get(worker);
 		if (pending) {
 			pending.reject(error.error);
 			this.pendingTasks.delete(worker);
 		}
+		this.replaceWorker(worker);
+		this.processQueue();
+	}
+
+	private handleWorkerTimeout(worker: Worker): void {
+		logger.warn("Worker task timed out, terminating worker.");
+		const timeout = this.timeouts.get(worker);
+		if (timeout) {
+			clearTimeout(timeout);
+			this.timeouts.delete(worker);
+		}
+		const pending = this.pendingTasks.get(worker);
+		if (pending) {
+			pending.reject(
+				new Error(`Regex operation timed out after ${WORKER_TIMEOUT_MS}ms`),
+			);
+			this.pendingTasks.delete(worker);
+		}
+		worker.terminate();
+		this.replaceWorker(worker);
 		this.processQueue();
 	}
 
@@ -232,6 +278,12 @@ class WorkerPool {
 		const { task, resolve, reject } = this.taskQueue.shift()!;
 		logger.debug("Assigning task to an available worker.");
 		this.pendingTasks.set(availableWorker, { resolve, reject });
+
+		const timeout = setTimeout(() => {
+			this.handleWorkerTimeout(availableWorker);
+		}, WORKER_TIMEOUT_MS);
+		this.timeouts.set(availableWorker, timeout);
+
 		availableWorker.postMessage(task);
 	}
 
@@ -453,7 +505,11 @@ async function handleSedCommand(
 			logger.debug(`Command result. New text length: ${currentText.length}`);
 		} catch (error: unknown) {
 			logger.error(String(error), "Worker pool task failed");
-			await ctx.reply("The substitution process failed.");
+			const errorMessage =
+				error instanceof Error && error.message.includes("timed out")
+					? `Regex operation timed out after ${WORKER_TIMEOUT_MS / 1000}s. Please use a simpler pattern.`
+					: "The substitution process failed.";
+			await ctx.reply(errorMessage);
 			return;
 		}
 	}
