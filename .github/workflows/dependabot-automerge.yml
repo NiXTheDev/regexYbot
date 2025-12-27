@@ -1,0 +1,50 @@
+name: Dependabot Auto-Merge
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    name: Auto-merge Dependabot PRs
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Wait for CI to complete
+        uses: lewagon/wait-on-check-action@v1.3.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          running-workflow-name: "Dependabot Auto-Merge"
+
+      - name: Check PR has automerge label
+        id: check-label
+        run: |
+          LABELS=$(gh pr view ${{ github.event.pull_request.number }} --json labels -q '.[].name')
+          if echo "$LABELS" | grep -q "automerge"; then
+            echo "has_automerge_label=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_automerge_label=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge PR if all checks pass
+        if: steps.check-label.outputs.has_automerge_label == 'true'
+        run: |
+          gh pr merge ${{ github.event.pull_request.number }} --merge --auto
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on PR if no automerge label
+        if: steps.check-label.outputs.has_automerge_label == 'false'
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body \
+            "🤖 This Dependabot PR does not have the `automerge` label. Add the label if you want it to be auto-merged after all checks pass."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
