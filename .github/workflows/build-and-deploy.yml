@@ -39,7 +39,7 @@ jobs:
         run: bun install -d --frozen-lockfile
 
       - name: Check format
-        run: prettier --check .
+        run: bunx prettier --check .
 
   typecheck:
     name: Type Check
