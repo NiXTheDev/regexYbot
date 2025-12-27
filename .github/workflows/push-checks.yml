@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Push Checks
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
         run: bun install -d --frozen-lockfile
 
       - name: Run lint
-        run: bun lint
+        run: bun run ltf:check
 
   format:
     name: Format Check
