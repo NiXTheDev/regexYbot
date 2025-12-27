@@ -49,7 +49,9 @@ jobs:
             GHCR_TAGS="ghcr.io/${REPO}:latest,ghcr.io/${REPO}:${COMMIT},ghcr.io/${REPO}:${VERSION}"
 
             CURRENT="$BASE_VERSION"
-            while [ -n "$CURRENT" ]; do
+            PREV="$BASE_VERSION"
+            while [ "$CURRENT" != "$PREV" ]; do
+              PREV="$CURRENT"
               CURRENT=$(echo "$CURRENT" | sed 's/\.[^.]*$//')
               if [ -n "$CURRENT" ]; then
                 DOCKER_TAGS="${DOCKER_TAGS},docker.io/${USERNAME}/regexybot:${CURRENT}"
