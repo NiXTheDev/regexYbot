@@ -31,7 +31,8 @@ jobs:
           VERSION='${{ steps.version.outputs.version }}'
           COMMIT='${{ steps.version.outputs.commit }}'
           USERNAME='${{ secrets.DOCKER_USERNAME }}'
-          REPO='${{ github.repository | lower }}'
+          REPO='${{ github.repository }}'
+          REPO=$(echo "$REPO" | tr '[:upper:]' '[:lower:]')
 
           # Build Docker Hub tags
           DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest"

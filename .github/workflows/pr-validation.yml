@@ -38,6 +38,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Generate tag
+        id: tag
+        run: |
+          REPO='${{ github.repository }}'
+          REPO=$(echo "$REPO" | tr '[:upper:]' '[:lower:]')
+          TAG="ghcr.io/${REPO}:pr-${{ github.event.pull_request.number }}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
       - name: Build Docker image (validation only)
         uses: docker/build-push-action@v5
         with:
@@ -45,4 +53,4 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
           push: false
           load: false
-          tags: ghcr.io/${{ github.repository | lower }}:pr-${{ github.event.pull_request.number }}
+          tags: ${{ steps.tag.outputs.tag }}
