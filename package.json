@@ -2,10 +2,10 @@
 	"name": "grammy-sed-bot",
 	"type": "module",
 	"dependencies": {
-		"@grammyjs/auto-retry": "latest",
+		"@grammyjs/auto-retry": "^2.0.2",
 		"@grammyjs/commands": "^1.2.0",
-		"@grammyjs/hydrate": "latest",
-		"@grammyjs/runner": "latest",
+		"@grammyjs/hydrate": "^1.6.0",
+		"@grammyjs/runner": "^2.0.3",
 		"grammy": "1.38.3"
 	},
 	"devDependencies": {
