@@ -21,8 +21,12 @@
 		"dev": "bun run --watch index.ts",
 		"main": "bun index.ts",
 		"test": "bun test",
-		"lint": "bun --bun tsc --noEmit && bunx eslint .",
+		"typecheck": "bun --bun tsc --noEmit",
+		"eslint": "bunx eslint .",
+		"lint": "bun run eslint",
 		"format": "bunx prettier --write .",
-		"format:check": "bunx prettier --check ."
+		"format:check": "bunx prettier --check .",
+		"ltf": "bun run lint && bun run typecheck && bun run format",
+		"ltf:check": "bun run lint && bun run typecheck && bun run format:check"
 	}
 }

@@ -21,7 +21,7 @@ jobs:
         run: bun install -d --frozen-lockfile
 
       - name: Run lint
-        run: bun run lint
+        run: bun run ltf:check
 
   format:
     name: Format Check
@@ -57,7 +57,7 @@ jobs:
         run: bun install -d --frozen-lockfile
 
       - name: Run type check
-        run: bun --bun tsc --noEmit
+        run: bun run typecheck
 
   test:
     name: Tests

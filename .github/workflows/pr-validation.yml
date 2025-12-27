@@ -24,10 +24,10 @@ jobs:
         run: bun install -d --frozen-lockfile
 
       - name: Type check
-        run: bun --bun tsc --noEmit
+        run: bun run typecheck
 
       - name: Lint
-        run: bun run lint
+        run: bun run eslint
 
       - name: Format check
         run: bun run format:check
