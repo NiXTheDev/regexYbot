@@ -8,10 +8,9 @@ description = "Allowlisted files and patterns"
 
 # Paths to exclude
 paths = [
-  "node_modules/*",
-  ".git/*",
-  "dist/*",
-  "*.log",
+  "node_modules/",
+  ".git/",
+  "dist/",
   ".env.example",
   ".dockerignore",
   ".gitignore",
