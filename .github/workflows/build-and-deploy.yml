@@ -45,9 +45,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push to Docker Hub and GHCR
-        uses: docker/build-push-action@v5
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6

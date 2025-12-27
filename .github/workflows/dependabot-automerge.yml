@@ -32,14 +32,14 @@ jobs:
             echo "has_automerge_label=false" >> $GITHUB_OUTPUT
           fi
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Merge PR if all checks pass
         if: steps.check-label.outputs.has_automerge_label == 'true'
         run: |
           gh pr merge ${{ github.event.pull_request.number }} --merge --auto
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Comment on PR if no automerge label
         if: steps.check-label.outputs.has_automerge_label == 'false'
@@ -47,4 +47,4 @@ jobs:
           gh pr comment ${{ github.event.pull_request.number }} --body \
             "🤖 This Dependabot PR does not have the `automerge` label. Add the label if you want it to be auto-merged after all checks pass."
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

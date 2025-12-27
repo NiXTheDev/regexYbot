@@ -46,7 +46,6 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              creator: context.actor,
             });
 
             const today = new Date().toDateString();
