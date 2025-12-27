@@ -347,6 +347,54 @@ function parseSedCommands(text: string): string[] {
 	return commands;
 }
 
+async function handleTextMessage(
+	ctx: MyContext,
+	messageText: string | undefined,
+	messageId: number,
+	isEdit: boolean,
+): Promise<void> {
+	if (!ctx.message && !ctx.editedMessage) return;
+
+	const text = messageText;
+	if (text && !text.startsWith("/") && ctx.chat) {
+		await dbService.storeMessageInHistory(ctx.chat.id, messageId, text);
+	}
+
+	if (text?.includes("s/")) {
+		const sedCommands = parseSedCommands(text);
+		logger.debug(`Found ${sedCommands.length} sed command(s).`);
+		if (sedCommands.length === 0) return;
+		const firstMatch = sedCommands[0].match(SED_PATTERN);
+		if (!firstMatch) return;
+		const { targetMsgText, targetMsgId } = await dbService.findTargetMessage(
+			ctx,
+			firstMatch,
+			isEdit ? messageId : undefined,
+		);
+		if (targetMsgText && targetMsgId && !SED_PATTERN.test(targetMsgText)) {
+			logger.debug(
+				`Found valid target. Proceeding with handleSedCommand (isEdit: ${isEdit}).`,
+			);
+			await handleSedCommand(
+				ctx,
+				sedCommands,
+				targetMsgText,
+				targetMsgId,
+				isEdit,
+			);
+		} else if (!targetMsgText || !targetMsgId) {
+			logger.info("No target found for sed command.");
+			if (!isEdit) {
+				await ctx
+					.reply("Could not find a matching message to substitute.")
+					.catch((err) => logger.error(err));
+			}
+		} else {
+			logger.debug("Target message is a sed command, ignoring.");
+		}
+	}
+}
+
 async function handleSedCommand(
 	ctx: MyContext,
 	sedCommands: string[],
@@ -461,86 +509,24 @@ bot.on("message", async (ctx) => {
 	logger.debug(
 		`Received message: ${ctx.message.text} (ID: ${ctx.message.message_id})`,
 	);
-	if (ctx.message && !ctx.message.text?.startsWith("/")) {
-		await dbService.storeMessageInHistory(
-			ctx.chat.id,
-			ctx.message.message_id,
-			ctx.message.text || ctx.message.caption,
-		);
-	}
-	if (ctx.message?.text?.includes("s/")) {
-		const sedCommands = parseSedCommands(ctx.message.text);
-		logger.debug(`Found ${sedCommands.length} sed command(s).`);
-		if (sedCommands.length === 0) return;
-		const firstMatch = sedCommands[0].match(SED_PATTERN);
-		if (!firstMatch) return;
-		const { targetMsgText, targetMsgId } = await dbService.findTargetMessage(
-			ctx,
-			firstMatch,
-		);
-		if (targetMsgText && targetMsgId && !SED_PATTERN.test(targetMsgText)) {
-			logger.debug("Found valid target. Proceeding with handleSedCommand.");
-			await handleSedCommand(
-				ctx,
-				sedCommands,
-				targetMsgText,
-				targetMsgId,
-				false,
-			);
-		} else if (!targetMsgText || !targetMsgId) {
-			logger.info("No target found for sed command.");
-			await ctx
-				.reply("Could not find a matching message to substitute.")
-				.catch((err) => logger.error(err));
-		} else {
-			logger.debug("Target message is a sed command, ignoring.");
-		}
-	}
+	await handleTextMessage(
+		ctx,
+		ctx.message.text || ctx.message.caption,
+		ctx.message.message_id,
+		false,
+	);
 });
 
 bot.on("edited_message", async (ctx) => {
 	logger.debug(
 		`Received edited message: ${ctx.editedMessage?.text} (ID: ${ctx.editedMessage?.message_id})`,
 	);
-	if (ctx.editedMessage && !ctx.editedMessage.text?.startsWith("/")) {
-		await dbService.storeMessageInHistory(
-			ctx.chat.id,
-			ctx.editedMessage.message_id,
-			ctx.editedMessage.text || ctx.editedMessage.caption,
-		);
-	}
-	if (ctx.editedMessage?.text?.includes("s/")) {
-		const sedCommands = parseSedCommands(ctx.editedMessage.text);
-		logger.debug(
-			`Found ${sedCommands.length} sed command(s) in edited message.`,
-		);
-		if (sedCommands.length === 0) return;
-		const firstMatch = sedCommands[0].match(SED_PATTERN);
-		if (!firstMatch) return;
-		const { targetMsgText, targetMsgId } = await dbService.findTargetMessage(
-			ctx,
-			firstMatch,
-			ctx.editedMessage.message_id,
-		);
-		if (targetMsgText && targetMsgId && !SED_PATTERN.test(targetMsgText)) {
-			logger.debug(
-				"Found valid target for edited message. Proceeding with handleSedCommand.",
-			);
-			await handleSedCommand(
-				ctx,
-				sedCommands,
-				targetMsgText,
-				targetMsgId,
-				true,
-			);
-		} else if (!targetMsgText || !targetMsgId) {
-			logger.info("No target found for sed command in edited message.");
-		} else {
-			logger.debug(
-				"Target message for edited message is a sed command, ignoring.",
-			);
-		}
-	}
+	await handleTextMessage(
+		ctx,
+		ctx.editedMessage.text || ctx.editedMessage.caption,
+		ctx.editedMessage.message_id,
+		true,
+	);
 });
 
 // --- Final Setup ---
