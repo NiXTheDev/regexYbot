@@ -13,6 +13,7 @@ import {
 	getRegexFlags,
 	SED_PATTERN,
 } from "./utils";
+import { CONFIG } from "./config";
 
 // --- Configuration ---
 const token = process.env.TOKEN;
@@ -22,11 +23,14 @@ if (!token) {
 	process.exit(1);
 }
 const base = (process.env.BASE_URL || "https://api.telegram.org").trim();
-const CLEANUP_INTERVAL_MS = 48 * 60 * 60 * 1000; // 48 hours
-const MAX_CHAIN_LENGTH = 5;
-const MAX_MESSAGE_LENGTH = 4096;
-const WORKER_POOL_SIZE = 4;
-const MAX_HISTORY_PER_CHAT = 20;
+const {
+	CLEANUP_INTERVAL_MS,
+	MAX_CHAIN_LENGTH,
+	MAX_MESSAGE_LENGTH,
+	WORKER_POOL_SIZE,
+	MAX_HISTORY_PER_CHAT,
+	HISTORY_QUERY_LIMIT,
+} = CONFIG;
 
 // --- Type Definitions ---
 type MyContext = Context & CommandsFlavor;
@@ -129,7 +133,7 @@ class DatabaseService {
 		const fr = match[1].replace(/\\\//g, "/");
 		const regex = new RegExp(fr, getRegexFlags(match[3]).flags);
 		const rows =
-			await db`SELECT message_id, text FROM message_history WHERE chat_id = ${chatId} ${excludeMessageId ? sql`AND message_id != ${excludeMessageId}` : sql``} ORDER BY timestamp DESC LIMIT 10`;
+			await db`SELECT message_id, text FROM message_history WHERE chat_id = ${chatId} ${excludeMessageId ? sql`AND message_id != ${excludeMessageId}` : sql``} ORDER BY timestamp DESC LIMIT ${HISTORY_QUERY_LIMIT}`;
 		for (const row of rows) {
 			if (row.text && regex.test(row.text)) {
 				logger.debug(`Found target in history (msg_id: ${row.message_id}).`);
