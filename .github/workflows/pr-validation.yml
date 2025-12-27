@@ -39,14 +39,10 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image (validation only)
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
           push: false
           load: false
-          tags: |
-            docker.io/${DOCKER_USERNAME}/regexybot:latest
-            ghcr.io/${{ github.repository }}:latest
+          tags: ghcr.io/${{ github.repository }}:pr-validation

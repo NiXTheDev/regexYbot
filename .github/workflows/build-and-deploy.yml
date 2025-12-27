@@ -18,12 +18,42 @@ jobs:
       - name: Get version
         id: version
         run: |
-          # Extract version from package.json
-          VERSION=$(grep '"version"' package.json | head -1 | cut -d '"' -f 4)
+          # Extract version from package.json, fallback to 'latest' if not found
+          VERSION=$(grep '"version"' package.json 2>/dev/null | head -1 | cut -d '"' -f 4 || echo "latest")
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           # Get short commit hash
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "commit=${COMMIT_HASH}" >> $GITHUB_OUTPUT
+
+      - name: Generate tags
+        id: tags
+        run: |
+          VERSION='${{ steps.version.outputs.version }}'
+          COMMIT='${{ steps.version.outputs.commit }}'
+          USERNAME='${{ secrets.DOCKER_USERNAME }}'
+          REPO='${{ github.repository }}'
+
+          # Build Docker Hub tags
+          DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest"
+          if [ "$VERSION" != "latest" ]; then
+            DOCKER_TAGS="$DOCKER_TAGS,docker.io/${USERNAME}/regexybot:${VERSION}"
+            DOCKER_TAGS="$DOCKER_TAGS,docker.io/${USERNAME}/regexybot:${VERSION}-${COMMIT}"
+          fi
+
+          # Build GHCR tags
+          GHCR_TAGS="ghcr.io/${REPO}:latest"
+          if [ "$VERSION" != "latest" ]; then
+            GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${VERSION}"
+            GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${VERSION}-${COMMIT}"
+          fi
+
+          # Combine all tags
+          ALL_TAGS="$DOCKER_TAGS,$GHCR_TAGS"
+          echo "tags=${ALL_TAGS}" >> $GITHUB_OUTPUT
+
+          # Also set for Docker Hub and GHCR separately
+          echo "docker_tags=${DOCKER_TAGS}" >> $GITHUB_OUTPUT
+          echo "ghcr_tags=${GHCR_TAGS}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -45,19 +75,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push to Docker Hub and GHCR
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
           push: true
-          tags: |
-            docker.io/${{ env.DOCKER_USERNAME }}/regexybot:latest
-            docker.io/${{ env.DOCKER_USERNAME }}/regexybot:${{ steps.version.outputs.version }}
-            docker.io/${{ env.DOCKER_USERNAME }}/regexybot:${{ steps.version.outputs.version }}-${{ steps.version.outputs.commit }}
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}-${{ steps.version.outputs.commit }}
+          tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
