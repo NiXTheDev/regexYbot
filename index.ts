@@ -163,13 +163,16 @@ const dbService = new DatabaseService(db);
 class WorkerPool {
 	private workers: Worker[];
 	private taskQueue: Array<{
-		task: any;
-		resolve: (value: any) => void;
-		reject: (reason?: any) => void;
+		task: TaskMessage;
+		resolve: (value: ResultMessage) => void;
+		reject: (reason?: unknown) => void;
 	}> = [];
 	private pendingTasks = new Map<
 		Worker,
-		{ resolve: (value: any) => void; reject: (reason?: any) => void }
+		{
+			resolve: (value: ResultMessage) => void;
+			reject: (reason?: unknown) => void;
+		}
 	>();
 
 	constructor(poolSize: number, workerScript: string) {
@@ -396,8 +399,8 @@ async function handleSedCommand(
 			}
 			currentText = result.result;
 			logger.debug(`Command result. New text length: ${currentText.length}`);
-		} catch (error: any) {
-			logger.error(error, "Worker pool task failed");
+		} catch (error: unknown) {
+			logger.error(String(error), "Worker pool task failed");
 			await ctx.reply("The substitution process failed.");
 			return;
 		}

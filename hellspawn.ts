@@ -25,9 +25,10 @@ function processTask(task: TaskMessage, logger: Logger): ResultMessage {
 
 		logger.debug(`Task successful. Result length: ${currentText.length}`);
 		return { result: currentText, performanceMs };
-	} catch (error: any) {
-		logger.error(`ERROR during processing: ${error.message}`);
-		return { result: "", performanceMs: null, error: error.message };
+	} catch (error: unknown) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		logger.error(`ERROR during processing: ${errorMessage}`);
+		return { result: "", performanceMs: null, error: errorMessage };
 	}
 }
 
