@@ -1,5 +1,6 @@
 {
-	"name": "grammy-sed-bot",
+	"name": "regexYbot",
+  "version": "1.7",
 	"type": "module",
 	"dependencies": {
 		"@grammyjs/auto-retry": "^2.0.2",
