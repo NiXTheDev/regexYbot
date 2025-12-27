@@ -21,7 +21,7 @@
 		"dev": "bun run --watch index.ts",
 		"main": "bun index.ts",
 		"test": "bun test",
-		"lint": "bun --bun tsc --noEmit && eslint .",
+		"lint": "bun --bun tsc --noEmit && bunx eslint .",
 		"format": "bunx prettier --write ."
 	}
 }
