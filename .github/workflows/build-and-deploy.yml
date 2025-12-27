@@ -35,18 +35,28 @@ jobs:
           REPO='${{ github.repository }}'
           REPO=$(echo "$REPO" | tr '[:upper:]' '[:lower:]')
 
+          # Parse version components (X.Y.Z)
+          if [ "$VERSION" != "latest" ]; then
+            MAJOR=$(echo "$VERSION" | cut -d '.' -f 1)
+            MAJOR_MINOR=$(echo "$VERSION" | cut -d '.' -f 1,2)
+          fi
+
           # Build Docker Hub tags
           DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest"
           if [ "$VERSION" != "latest" ]; then
             DOCKER_TAGS="$DOCKER_TAGS,docker.io/${USERNAME}/regexybot:${VERSION}"
-            DOCKER_TAGS="$DOCKER_TAGS,docker.io/${USERNAME}/regexybot:${VERSION}-${COMMIT}"
+            DOCKER_TAGS="$DOCKER_TAGS,docker.io/${USERNAME}/regexybot:${MAJOR_MINOR}"
+            DOCKER_TAGS="$DOCKER_TAGS,docker.io/${USERNAME}/regexybot:${MAJOR}"
+            DOCKER_TAGS="$DOCKER_TAGS,docker.io/${USERNAME}/regexybot:${COMMIT}"
           fi
 
           # Build GHCR tags
           GHCR_TAGS="ghcr.io/${REPO}:latest"
           if [ "$VERSION" != "latest" ]; then
             GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${VERSION}"
-            GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${VERSION}-${COMMIT}"
+            GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${MAJOR_MINOR}"
+            GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${MAJOR}"
+            GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${COMMIT}"
           fi
 
           # Combine all tags
