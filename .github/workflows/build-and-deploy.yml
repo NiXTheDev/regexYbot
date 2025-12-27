@@ -45,34 +45,22 @@ jobs:
             echo "Base version: $BASE_VERSION"
             echo "Pre-release: $PRE_RELEASE"
 
-            TAGS=()
-            TAGS+=("$VERSION")
+            DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:${COMMIT},docker.io/${USERNAME}/regexybot:${VERSION}"
+            GHCR_TAGS="ghcr.io/${REPO}:latest,ghcr.io/${REPO}:${COMMIT},ghcr.io/${REPO}:${VERSION}"
 
             CURRENT="$BASE_VERSION"
-            while true; do
+            while [ -n "$CURRENT" ]; do
               CURRENT=$(echo "$CURRENT" | sed 's/\.[^.]*$//')
-              if [ -z "$CURRENT" ]; then
-                break
+              if [ -n "$CURRENT" ]; then
+                DOCKER_TAGS="${DOCKER_TAGS},docker.io/${USERNAME}/regexybot:${CURRENT}"
+                GHCR_TAGS="${GHCR_TAGS},ghcr.io/${REPO}:${CURRENT}"
               fi
-              TAGS+=("$CURRENT")
             done
 
             if [ -n "$PRE_RELEASE" ]; then
-              TAGS+=("$PRE_RELEASE")
+              DOCKER_TAGS="${DOCKER_TAGS},docker.io/${USERNAME}/regexybot:${PRE_RELEASE}"
+              GHCR_TAGS="${GHCR_TAGS},ghcr.io/${REPO}:${PRE_RELEASE}"
             fi
-
-            echo "Generated tags:"
-            printf '%s\n' "${TAGS[@]}"
-
-            DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:${COMMIT}"
-            for TAG in "${TAGS[@]}"; do
-              DOCKER_TAGS="$DOCKER_TAGS,docker.io/${USERNAME}/regexybot:${TAG}"
-            done
-
-            GHCR_TAGS="ghcr.io/${REPO}:latest,ghcr.io/${REPO}:${COMMIT}"
-            for TAG in "${TAGS[@]}"; do
-              GHCR_TAGS="$GHCR_TAGS,ghcr.io/${REPO}:${TAG}"
-            done
           else
             DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:${COMMIT}"
             GHCR_TAGS="ghcr.io/${REPO}:latest,ghcr.io/${REPO}:${COMMIT}"
