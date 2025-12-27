@@ -1,6 +1,6 @@
 {
 	"name": "regexYbot",
-  "version": "1.7",
+  "version": "0.1.7",
 	"type": "module",
 	"dependencies": {
 		"@grammyjs/auto-retry": "^2.0.2",
