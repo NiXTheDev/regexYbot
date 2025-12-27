@@ -1,3 +1,9 @@
 node_modules
 .env
-README.md
+.git
+.github
+*.md
+LICENSE
+.prettierrc
+.editorconfig
+eslint.config.js
