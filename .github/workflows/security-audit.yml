@@ -12,6 +12,7 @@ jobs:
     permissions:
       issues: write
       contents: read
+      security-events: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
