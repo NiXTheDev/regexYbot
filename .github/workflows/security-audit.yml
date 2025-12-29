@@ -28,8 +28,8 @@ jobs:
       - name: Run security audit
         id: audit
         run: |
-          echo "AUDIT_OUTPUT=$(bun pm scan --json 2>&1)" >> $GITHUB_ENV
-          bun pm scan --level=moderate
+          echo "AUDIT_OUTPUT=$(bun pm scan 2>&1)" >> $GITHUB_ENV
+          bun pm scan
         continue-on-error: true
 
       - name: Create issue for vulnerabilities
