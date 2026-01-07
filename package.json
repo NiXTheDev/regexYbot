@@ -27,7 +27,7 @@
 		"main": "bun index.ts",
 		"test": "bun test",
 		"typecheck": "bun --bun tsc --noEmit",
-		"eslint": "bunx eslint . --ignore-pattern '*.yml' --ignore-pattern '*.yaml'",
+		"eslint": "bunx eslint .",
 		"lint": "bun run eslint",
 		"format": "bunx prettier --write .",
 		"format:check": "bunx prettier --check .",
