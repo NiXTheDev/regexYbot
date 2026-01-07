@@ -18,6 +18,10 @@ export default [
 		},
 	},
 	{
+		files: ["*.yml", "*.yaml"],
+		rules: {},
+	},
+	{
 		ignores: ["node_modules/", "dist/", "*.lock", "*.ts"],
 	},
 ];
