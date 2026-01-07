@@ -14,15 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
     steps:
-       - name: Wait for CI to complete
-         uses: lewagon/wait-on-check-action@v1.4.1
-         with:
-           ref: ${{ github.event.pull_request.head.sha }}
-           repo-token: ${{ secrets.GITHUB_TOKEN }}
-           wait-interval: 10
-           running-workflow-name: "Auto-merge Dependabot PRs"
+        - name: Wait for CI to complete
+          uses: lewagon/wait-on-check-action@v1.4.1
+          with:
+            ref: ${{ github.event.pull_request.head.sha }}
+            repo-token: ${{ secrets.GITHUB_TOKEN }}
+            wait-interval: 10
+            running-workflow-name: "Auto-merge Dependabot PRs"
+          run: |
+            echo "AUDIT_OUTPUT=$(bun pm scan 2>&1)" >> $GITHUB_ENV
+            bun pm scan
 
-      - name: Check PR has automerge label
+       - name: Check PR has automerge label
         id: check-label
         run: |
           LABELS=$(gh pr view ${{ github.event.pull_request.number }} --json labels -q '.[].name')
