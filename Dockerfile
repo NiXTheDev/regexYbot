@@ -4,9 +4,9 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-COPY package.json bun.lock ./
+COPY package.json ./
 
-RUN bun install --frozen-lockfile --production
+RUN bun install --production
 
 COPY . .
 
