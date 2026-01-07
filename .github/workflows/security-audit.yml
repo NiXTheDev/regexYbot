@@ -26,15 +26,15 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run security audit
-        id: audit
-        run: |
-          echo "AUDIT_OUTPUT=$(bun pm scan 2>&1)" >> $GITHUB_ENV
-          bun pm scan
-        continue-on-error: true
+         id: audit
+         run: |
+           echo "AUDIT_OUTPUT=$(bun audit 2>&1)" >> $GITHUB_ENV
+           bun audit
+         continue-on-error: true
 
-      - name: Create issue for vulnerabilities
-        if: steps.audit.outcome == 'failure'
-        uses: actions/github-script@v7
+       - name: Create issue for vulnerabilities
+         if: steps.audit.outcome == 'failure'
+         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');

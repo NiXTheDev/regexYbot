@@ -10,7 +10,6 @@
 		"grammy": "1.39.2"
 	},
 	"devDependencies": {
-		"@bun-security-scanner/osv": "^1.0.0",
 		"@eslint/eslintrc": "^3.3.3",
 		"@types/bun": "1.3.5",
 		"@typescript-eslint/eslint-plugin": "^8.51.0",
