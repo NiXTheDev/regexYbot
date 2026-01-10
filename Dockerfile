@@ -14,4 +14,4 @@ RUN chown -R bun:bun /app
 
 USER bun
 
-CMD ["bun", "run", "main"]
+CMD ["bun", "run", "index.ts"]
