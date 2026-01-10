@@ -13,25 +13,24 @@
 		"@bun-security-scanner/osv": "^1.0.0",
 		"@eslint/eslintrc": "^3.3.3",
 		"@types/bun": "1.3.5",
-		"@typescript-eslint/eslint-plugin": "^8.51.0",
-		"@typescript-eslint/parser": "^8.51.0",
+		"@typescript-eslint/eslint-plugin": "^8.52.0",
+		"@typescript-eslint/parser": "^8.52.0",
 		"eslint": "^9.39.2",
 		"prettier": "^3.7.4",
-		"typescript": "^5.0.0"
+		"typescript": "^5.9.3",
+		"typescript-eslint": "^8.52.0"
 	},
 	"overrides": {
 		"@eslint/eslintrc": "3.3.3"
 	},
 	"scripts": {
 		"dev": "bun run --watch index.ts",
-		"main": "bun index.ts",
-		"test": "bun test",
+		"main": "bun run index.ts",
 		"typecheck": "bun --bun tsc --noEmit",
-		"eslint": "bunx eslint .",
-		"lint": "bun run eslint",
+		"lint": "bunx eslint .",
 		"format": "bunx prettier --write .",
 		"format:check": "bunx prettier --check .",
-		"ltf": "bun run lint && bun run typecheck && bun run format",
+		"ltf": "bun lint && bun typecheck && bun format && bun test",
 		"ltf:check": "bun run lint && bun run typecheck && bun run format:check"
 	}
 }

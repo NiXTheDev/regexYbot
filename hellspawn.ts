@@ -1,4 +1,4 @@
-declare var self: Worker;
+declare let self: Worker;
 import { Logger } from "./logger";
 import { performance } from "perf_hooks";
 import { TaskMessage, ResultMessage } from "./types"; // Import from types.ts

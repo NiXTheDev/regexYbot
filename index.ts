@@ -6,6 +6,7 @@ import {
 import { run } from "@grammyjs/runner";
 import { sql, SQL } from "bun";
 import { Bot, Context, GrammyError } from "grammy";
+import { autoRetry } from "@grammyjs/auto-retry";
 import { Logger } from "./logger";
 import { ResultMessage, SedCommand, TaskMessage } from "./types";
 import {
@@ -31,6 +32,8 @@ const {
 	MAX_HISTORY_PER_CHAT,
 	HISTORY_QUERY_LIMIT,
 	WORKER_TIMEOUT_MS,
+	RETRY_MAX_RETRIES,
+	RETRY_MAX_DELAY_MS,
 } = CONFIG;
 
 // --- Type Definitions ---
@@ -40,6 +43,15 @@ type MyContext = Context & CommandsFlavor;
 const logger = new Logger("Main");
 logger.info("Initializing bot...");
 const bot = new Bot<MyContext>(token, { client: { apiRoot: base } });
+
+// --- Rate Limiting & Retry Configuration ---
+bot.api.config.use(
+	autoRetry({
+		maxRetryAttempts: RETRY_MAX_RETRIES,
+		maxDelaySeconds: RETRY_MAX_DELAY_MS / 1000,
+	}),
+);
+
 bot.use(commands());
 
 // --- Database Setup ---
@@ -194,7 +206,7 @@ class WorkerPool {
 		logger.info("Worker pool initialized.");
 	}
 
-	private createWorker(index: number, total: number): Worker {
+	private createWorker(_index: number, _total: number): Worker {
 		const worker = new Worker(this.workerScript);
 		worker.onmessage = (event) => this.handleWorkerMessage(worker, event.data);
 		worker.onerror = (error) => this.handleWorkerError(worker, error);
@@ -370,7 +382,9 @@ async function sendOrEditReply(
 				await ctx.reply(
 					"Failed to send substitution result due to formatting or size.",
 				);
-			} catch {}
+			} catch {
+				// Ignore reply errors
+			}
 		}
 	}
 }
@@ -583,6 +597,18 @@ bot.on("edited_message", async (ctx) => {
 		ctx.editedMessage.message_id,
 		true,
 	);
+});
+
+// --- Global Error Handlers ---
+process.on(
+	"unhandledRejection",
+	(reason: unknown, promise: Promise<unknown>) => {
+		logger.error(`Unhandled Rejection at: ${promise}, reason: ${reason}`);
+	},
+);
+
+process.on("uncaughtException", (error: Error) => {
+	logger.fatal(`Uncaught Exception: ${error.message}\n${error.stack}`);
 });
 
 // --- Final Setup ---

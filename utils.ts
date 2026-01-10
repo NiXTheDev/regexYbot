@@ -1,9 +1,8 @@
 // utils.ts
-import { LogLevel } from "./types";
 
 // Regex for sed command, reverting to the original non-greedy version.
 export const SED_PATTERN =
-	/^s\/((?:\\.|[^\/])+?)\/((?:\\.|[^\/])*?)(?:\/([^]*))?$/;
+	/^s\/((?:\\.|[^/])+?)\/((?:\\.|[^/])*?)(?:\/([^]*))?$/;
 
 // Helper function to get regex flags from a sed command
 export function getRegexFlags(flagsMatch: string | undefined): {
@@ -27,6 +26,6 @@ export function escapeForMarkdownV2AndBackslashes(text: string): string {
 	// First, escape any literal backslashes in the original text.
 	let escapedText = text.replace(/\\/g, "\\\\");
 	// Then, escape all MarkdownV2 special characters with a single backslash.
-	escapedText = escapedText.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, "\\$1");
+	escapedText = escapedText.replace(/([_*[\]()~`>#+\-=|{}.!])/g, "\\$1");
 	return escapedText;
 }
