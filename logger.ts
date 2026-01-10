@@ -34,7 +34,7 @@ export class Logger {
 	private log(
 		level: Exclude<LogLevel, "none">,
 		message: string,
-		...args: any[]
+		...args: unknown[]
 	) {
 		// If the global level is 'none', do nothing.
 		if (globalLogLevel === "none") return;
@@ -52,16 +52,16 @@ export class Logger {
 		output(formattedMessage, ...args);
 	}
 
-	public debug(message: string, ...args: any[]) {
+	public debug(message: string, ...args: unknown[]) {
 		this.log("debug", message, ...args);
 	}
-	public info(message: string, ...args: any[]) {
+	public info(message: string, ...args: unknown[]) {
 		this.log("info", message, ...args);
 	}
-	public warn(message: string, ...args: any[]) {
+	public warn(message: string, ...args: unknown[]) {
 		this.log("warn", message, ...args);
 	}
-	public error(message: string, ...args: any[]) {
+	public error(message: string, ...args: unknown[]) {
 		this.log("error", message, ...args);
 	}
 
@@ -70,7 +70,7 @@ export class Logger {
 	 * @param message - The message to log.
 	 * @param args - Additional arguments to pass to the console.
 	 */
-	public fatal(message: string, ...args: any[]) {
+	public fatal(message: string, ...args: unknown[]) {
 		this.log("fatal", message, ...args);
 		process.exit(1);
 	}

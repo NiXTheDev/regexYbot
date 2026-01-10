@@ -1,2 +1,8 @@
-[install.security]
-scanner = "@bun-security-scanner/osv"
+# Security scanner is disabled by default for production builds.
+# Enable it for development by setting:
+# BUN_INSTALL_SECURITY=@bun-security-scanner/osv bun install
+#
+# Security scanning is also performed by GitHub workflows.
+
+# [install.security]
+# scanner = "@bun-security-scanner/osv"

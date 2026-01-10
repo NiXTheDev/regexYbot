@@ -1,0 +1,72 @@
+services:
+  regexybot:
+    image: ghcr.io/nixthedev/regexybot:latest
+    container_name: regexybot
+    restart: unless-stopped
+    environment:
+      - TOKEN=${TOKEN:-your_bot_token_here}
+      # Optional: Custom Telegram API server (default: https://api.telegram.org)
+      # - BASE_URL=https://my-telegram-api.local/bot
+      #
+      # File-based healthcheck (uncomment to enable Option 4):
+      # - ENABLE_FILE_HEALTHCHECK=true
+      # - LIVENESS_FILE=/tmp/bot-alive
+      # - LIVENESS_INTERVAL_MS=30000
+    # healthcheck:
+      # ========================================================================
+      # HEALTHCHECK OPTIONS - Uncomment ONE of the following blocks:
+      # ========================================================================
+      #
+      # OPTION 1: Process Check (simplest)
+      # Checks that the bun process is running.
+      # Pros: Simple, works offline, no network required.
+      # Cons: Process could be hung/deadlocked.
+      #
+      # test: ["CMD", "pgrep", "-x", "bun"]
+      # interval: 30s
+      # timeout: 5s
+      # retries: 3
+      # start_period: 10s
+      #
+      # OPTION 2: API Check (verifies network + token)
+      # Makes a request to the Telegram API to verify connectivity.
+      # Pros: Verifies bot can reach Telegram API.
+      # Cons: Requires network, doesn't catch deadlocked process.
+      #
+      # test: ["CMD-SHELL", "curl -f ${BASE_URL:-https://api.telegram.org}/bot${TOKEN}/getMe || exit 1"]
+      # interval: 30s
+      # timeout: 10s
+      # retries: 3
+      # start_period: 15s
+      #
+      # OPTION 3: Combined (process + API)
+      # Checks both that the process is running AND the API is reachable.
+      # Pros: Catches both process crashes and network issues.
+      # Cons: Slightly more complex.
+      #
+      # test: ["CMD-SHELL", "pgrep -x bun > /dev/null && curl -f ${BASE_URL:-https://api.telegram.org}/bot${TOKEN}/getMe > /dev/null 2>&1 || exit 1"]
+      # interval: 30s
+      # timeout: 10s
+      # retries: 3
+      # start_period: 15s
+      #
+      # OPTION 4: File-based (requires ENABLE_FILE_HEALTHCHECK env var above)
+      # Checks that the bot is actively writing to a liveness file.
+      # Pros: Proves the bot's event loop is running (catches deadlocks).
+      # Cons: Requires environment variable + healthcheck uncommented.
+      #
+      # test: ["CMD-SHELL", "test $(($(date +%s) - $(cat /tmp/bot-alive 2>/dev/null || echo 0))) -lt 60 || exit 1"]
+      # interval: 30s
+      # timeout: 5s
+      # retries: 3
+      # start_period: 20s
+      #
+      # ========================================================================
+    volumes:
+      # Optional: Mount custom config (uncomment and create config file if needed)
+      # - ./config.env:/app/.env:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

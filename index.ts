@@ -5,6 +5,7 @@ import {
 } from "@grammyjs/commands";
 import { run } from "@grammyjs/runner";
 import { sql, SQL } from "bun";
+import { writeFileSync } from "node:fs";
 import { Bot, Context, GrammyError } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { Logger } from "./logger";
@@ -610,6 +611,23 @@ process.on(
 process.on("uncaughtException", (error: Error) => {
 	logger.fatal(`Uncaught Exception: ${error.message}\n${error.stack}`);
 });
+
+// --- File-based Healthcheck ---
+if (process.env.ENABLE_FILE_HEALTHCHECK === "true") {
+	const livenessFile = process.env.LIVENESS_FILE || "/tmp/bot-alive";
+	const livenessInterval = parseInt(
+		process.env.LIVENESS_INTERVAL_MS || "30000",
+		10,
+	);
+	logger.info(`File-based healthcheck enabled (file: ${livenessFile})`);
+	setInterval(() => {
+		try {
+			writeFileSync(livenessFile, Date.now().toString());
+		} catch (error) {
+			logger.error(`Failed to write liveness file: ${error}`);
+		}
+	}, livenessInterval);
+}
 
 // --- Final Setup ---
 myCommands
