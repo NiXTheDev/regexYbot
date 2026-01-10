@@ -114,5 +114,5 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: false
-        load: false
-        tags: ${{ steps.tag.outputs.tag }}
+          load: false
+          tags: ${{ steps.tag.outputs.tag }}
