@@ -20,72 +20,75 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
-        bun-version: 1.3.5
+          bun-version: 1.3.5
 
       - name: Install dependencies
-        run: bun install 
+        run: bun install
 
       - name: Run security audit
         id: audit
         run: |
-        echo "AUDIT_OUTPUT=$(bun audit 2>&1)" >> $GITHUB_ENV
-        bun audit
-        continue-on-error: true
+          set +e
+          AUDIT_OUTPUT=$(bun audit 2>&1)
+          AUDIT_EXIT=$?
+          echo "AUDIT_OUTPUT=${AUDIT_OUTPUT}" >> $GITHUB_ENV
+          echo "AUDIT_EXIT=${AUDIT_EXIT}" >> $GITHUB_ENV
+          exit $AUDIT_EXIT
 
-       - name: Create issue for vulnerabilities
-        if: steps.audit.outcome == 'failure'
-        uses: actions/github-script@v7
+      - name: Create issue for vulnerabilities
+        if: env.AUDIT_EXIT != 0
+        uses: actions/github-script@v8
         with:
-        script: |
-         const fs = require('fs');
-         const auditOutput = process.env.AUDIT_OUTPUT || 'Audit failed';
-         const timestamp = new Date().toISOString();
+          script: |
+            const fs = require('fs');
+            const auditOutput = process.env.AUDIT_OUTPUT || 'Audit failed';
+            const timestamp = new Date().toISOString();
 
-         // Check if an issue already exists for today
-         const { data: issues } = await github.rest.issues.listForRepo({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          state: 'open',
-         });
+            // Check if an issue already exists for today
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+            });
 
-         const today = new Date().toDateString();
-         const existingIssue = issues.find(issue => 
-          issue.title.includes('Security Audit') && 
-          new Date(issue.created_at).toDateString() === today
-         );
+            const today = new Date().toDateString();
+            const existingIssue = issues.find(issue =>
+              issue.title.includes('Security Audit') &&
+              new Date(issue.created_at).toDateString() === today
+            );
 
-         const body = `## 🔒 Security Audit Report
+            const body = `## 🔒 Security Audit Report
 
-         **Date:** ${timestamp}
+            **Date:** ${timestamp}
 
-         ### Audit Output
-         \`\`\`
-         ${auditOutput}
-         \`\`\`
+            ### Audit Output
+            \`\`\`
+            ${auditOutput}
+            \`\`\`
 
-         ### Recommended Actions
-         - Review the vulnerabilities above
-         - Update affected packages using \`bun update\`
-         - Run \`bun pm audit fix\` if available
+            ### Recommended Actions
+            - Review the vulnerabilities above
+            - Update affected packages using \`bun update\`
+            - Run \`bun pm audit fix\` if available
 
-         This issue will be updated if new vulnerabilities are found. Close it after resolving all security issues.
-         `;
+            This issue will be updated if new vulnerabilities are found. Close it after resolving all security issues.
+            `;
 
-         if (existingIssue) {
-          await github.rest.issues.update({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: existingIssue.number,
-            body: body
-          });
-          console.log('Updated existing issue');
-         } else {
-          await github.rest.issues.create({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            title: `🔒 Security Audit: Vulnerabilities Detected - ${timestamp}`,
-            body: body,
-            labels: ['security', 'audit']
-          });
-          console.log('Created new issue');
-         }
+            if (existingIssue) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: body
+              });
+              console.log('Updated existing issue');
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `🔒 Security Audit: Vulnerabilities Detected - ${timestamp}`,
+                body: body,
+                labels: ['security', 'audit']
+              });
+              console.log('Created new issue');
+            }

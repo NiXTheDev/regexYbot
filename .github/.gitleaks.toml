@@ -14,7 +14,8 @@ paths = [
   ".env.example",
   ".dockerignore",
   ".gitignore",
-  "bun.lock"
+  "bun.lock",
+  "bun.lockb"
 ]
 
 # Comments in code that match these patterns are allowed (e.g., "TODO: add real token here")

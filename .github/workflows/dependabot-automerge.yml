@@ -14,13 +14,39 @@ jobs:
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
     steps:
-      - name: Wait for CI to complete
-        uses: lewagon/wait-on-check-action@v1.4.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 10
-          running-workflow-name: "Auto-merge Dependabot PRs"
+      - name: Wait for required checks
+        run: |
+          echo "Waiting for all required checks to pass..."
+
+          MAX_WAIT=300
+          INTERVAL=10
+          ELAPSED=0
+
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            # Get the combined status of all checks for this PR
+            STATUS=$(gh pr view ${{ github.event.pull_request.number }} --json commits -q '.commits[].statusCheckRollup')
+
+            # Check if there are any failing checks
+            FAILING=$(echo "$STATUS" | jq -r '.[] | select(.state != "SUCCESS") | .conclusion' 2>/dev/null | head -1 || echo "")
+
+            if [ -z "$FAILING" ]; then
+              # No failing checks - verify there are checks to wait for
+              CHECK_COUNT=$(echo "$STATUS" | jq -r 'length' 2>/dev/null || echo "0")
+              if [ "$CHECK_COUNT" -gt 0 ]; then
+                echo "All checks passed!"
+                exit 0
+              fi
+            fi
+
+            echo "Waiting for checks... (${ELAPSED}s elapsed)"
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
+          echo "Timeout waiting for checks to pass"
+          exit 1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check PR has automerge label
         id: check-label
@@ -44,6 +70,6 @@ jobs:
         if: steps.check-label.outputs.has_automerge_label == 'false'
         run: |
           gh pr comment ${{ github.event.pull_request.number }} --body \
-            "🤖 This Dependabot PR does not have the `automerge` label. Add the label if you want it to be auto-merged after all checks pass."
+            "🤖 This Dependabot PR does not have the \`automerge\` label. Add the label if you want it to be auto-merged after all checks pass."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
