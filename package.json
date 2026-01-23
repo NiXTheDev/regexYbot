@@ -28,9 +28,9 @@
 		"main": "bun run index.ts",
 		"typecheck": "bun --bun tsc --noEmit",
 		"lint": "bunx eslint .",
-		"format": "bunx prettier --write .",
-		"format:check": "bunx prettier --check .",
-		"ltf": "bun lint && bun typecheck && bun format && bun test",
-		"ltf:check": "bun run lint && bun run typecheck && bun run format:check"
+		"fmt": "bunx prettier --write .",
+		"fmt:check": "bunx prettier --check .",
+		"ltf": "bun lint && bun typecheck && bun fmt && bun test ./tests/*.test.ts",
+		"ltf:check": "bun run lint && bun run typecheck && bun run fmt:check"
 	}
 }
