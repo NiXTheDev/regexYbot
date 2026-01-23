@@ -27,4 +27,5 @@ export interface ResultMessage {
 	result: string;
 	performanceMs: number | null;
 	error?: string;
+	taskId?: number;
 }

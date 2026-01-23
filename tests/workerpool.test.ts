@@ -99,7 +99,7 @@ class MockWorkerPool {
 		this.processQueue();
 	}
 
-	private executeTask(task: TaskMessage, __taskId: number): ResultMessage {
+	private executeTask(task: TaskMessage, taskId: number): ResultMessage {
 		const startTime = task.includePerformance ? performance.now() : undefined;
 		try {
 			let currentText = task.initialText;
@@ -111,9 +111,9 @@ class MockWorkerPool {
 			if (task.includePerformance && startTime !== undefined) {
 				performanceMs = performance.now() - startTime;
 			}
-			return { result: currentText, performanceMs };
+			return { result: currentText, performanceMs, taskId };
 		} catch (error) {
-			return { result: "", performanceMs: null, error: String(error) };
+			return { result: "", performanceMs: null, error: String(error), taskId };
 		}
 	}
 }
