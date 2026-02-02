@@ -76,7 +76,7 @@ jobs:
         run: bun install -d
 
       - name: Run tests
-        run: bun test ./tests/*
+        run: bun test ./tests/*.test.ts
 
   build-and-push:
     name: Build and Push Docker Image
