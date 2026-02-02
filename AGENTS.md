@@ -99,7 +99,7 @@ bun run typecheck
 
 ```bash
 bun run ltf
-# expands to: bun lint && bun typecheck && bun format && bun test ./tests/*
+# expands to: bun lint && bun typecheck && bun fmt && bun test ./tests/*.test.ts
 ```
 
 - Faster, non-mutating check (no `bun test`, formatting is check-only):
