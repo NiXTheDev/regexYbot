@@ -18,40 +18,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Check PR has automerge label
+      - name: Check PR for automerge label
         id: check-label
         run: |
+          # Use the GitHub CLI to check if the PR has the 'automerge' label
           HAS_AUTOMERGE=$(gh pr view ${{ github.event.pull_request.number }} --json labels -q '.labels | any(.name == "automerge")')
           echo "has_automerge_label=$HAS_AUTOMERGE" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check and wait for all status checks
-        id: wait-for-checks
+      - name: Wait for all other status checks
+        id: wait-for-others
+        # Only run this step if the PR has the 'automerge' label
         if: steps.check-label.outputs.has_automerge_label == 'true'
-        continue-on-error: true
-        run: |
-          gh pr checks ${{ github.event.pull_request.number }} --watch --interval 10 --fail-fast
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Verify all checks are successful
-        id: verify-checks
-        if: steps.check-label.outputs.has_automerge_label == 'true'
-        run: |
-          CHECK_RESULT=$(gh pr checks ${{ github.event.pull_request.number }} --json state -q '[.checks[].state] | all(. == "PASSED" or . == "SKIPPED")')
-          if [[ "$CHECK_RESULT" == "true" ]]; then
-            echo "all_checks_passed=true" >> $GITHUB_OUTPUT
-          else
-            echo "all_checks_passed=false" >> $GITHUB_OUTPUT
-            echo "❌ Not all checks passed. Failing..."
-            exit 1
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: poseidon/wait-for-status-checks@v0.6.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ignore: 'Auto-merge Dependabot PRs'
+          delay: '5s'
+          interval: '10s'
+          timeout: '300s'
 
       - name: Merge PR
-        if: steps.check-label.outputs.has_automerge_label == 'true' && steps.verify-checks.outputs.all_checks_passed == 'true'
+        if: steps.check-label.outputs.has_automerge_label == 'true' && success()
         run: |
           gh pr merge ${{ github.event.pull_request.number }} --merge --auto
         env:
