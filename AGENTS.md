@@ -6,7 +6,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ### Environment & Dependencies
 
-- Runtime: [Bun](https://bun.sh/) (CI and Docker use Bun 1.3.5).
+- Runtime: [Bun](https://bun.sh/) (CI and Docker use Bun 1.3.8).
 - Install dependencies:
 
 ```bash
@@ -99,7 +99,7 @@ bun run typecheck
 
 ```bash
 bun run ltf
-# expands to: bun lint && bun typecheck && bun format && bun test
+# expands to: bun lint && bun typecheck && bun format && bun test ./tests/*
 ```
 
 - Faster, non-mutating check (no `bun test`, formatting is check-only):
