@@ -31,7 +31,7 @@ Configure the bot's behavior with the following environment variables:
 | Variable | Required | Description | Default Value |
 | :--- | :---: | :--- | :--- |
 | `TOKEN` | **Yes** | Your Telegram bot token. | — |
-| `BASE_URL` | No | Base URL for the Telegram Bot API, useful for local testing. | — |
+| `BASE_URL` | No | Base URL for the Telegram Bot API, useful for local testing. | `https://api.telegram.org` |
 | `LOG_LEVEL` | No | Sets the minimum log level. <br>**Available levels:** `none`, `debug`, `info`, `warn`, `error`, `fatal`. | `debug` (development)<br>`info` (production) |
 | `LOG_TEMPLATE` | No | Customizes the log output format. | `[{level}: {module}]: {message}` |
 | `NODE_ENV` | No | Set to `production` to default the log level to `info`. | — |
