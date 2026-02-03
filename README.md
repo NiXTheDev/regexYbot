@@ -28,13 +28,14 @@ A fast, efficient, and feature-rich Telegram bot built with [grammY](https://git
 
 Configure the bot's behavior with the following environment variables:
 
-- `TOKEN`: Your Telegram bot token (required).
-- `BASE_URL` (Optional): Base URL for the Telegram Bot API, useful for local testing.
-- `LOG_LEVEL` (Optional): Sets the minimum log level. Defaults to `debug` in development and `info` in production.
-  - **Available levels:** `none`, `debug`, `info`, `warn`, `error`, `fatal`.
-- `LOG_TEMPLATE` (Optional): Customizes the log output format. Defaults to `[{level}: {module}]: {message}`.
-- `NODE_ENV` (Optional): Set to `production` to default the log level to `info`.
-- `WORKER_POOL_SIZE` (Optional): Sets the number of worker threads for regex processing. Defaults to `4`.
+| Variable | Required | Description | Default Value |
+| :--- | :---: | :--- | :--- |
+| `TOKEN` | **Yes** | Your Telegram bot token. | — |
+| `BASE_URL` | No | Base URL for the Telegram Bot API, useful for local testing. | — |
+| `LOG_LEVEL` | No | Sets the minimum log level. <br>**Available levels:** `none`, `debug`, `info`, `warn`, `error`, `fatal`. | `debug` (development)<br>`info` (production) |
+| `LOG_TEMPLATE` | No | Customizes the log output format. | `[{level}: {module}]: {message}` |
+| `NODE_ENV` | No | Set to `production` to default the log level to `info`. | — |
+| `WORKER_POOL_SIZE` | No | Sets the number of worker threads for regex processing. | 4 |
 
 ## Setup & Run
 
