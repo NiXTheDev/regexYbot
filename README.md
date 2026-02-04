@@ -13,7 +13,7 @@ A fast, efficient, and feature-rich Telegram bot built with [grammY](https://git
 - **Runtime Safety:** Includes a configurable timeout (default 60 seconds) for regex execution to prevent hanging on potentially malicious or extremely slow patterns.
 - **Opportunistic Cleanup:** Automatically removes message history and bot reply mappings older than 48 hours on every bot update for efficiency.
 - **Error Resilience:** Handles Telegram API errors gracefully (e.g., "message is not modified", flood control) and avoids resending identical messages unnecessarily.
-- **Grouping Support:** Fully supports regex capture groups (`(\w+)`) and referencing them in the replacement string using `$1`, `$2`, etc.
+- **Grouping Support:** Fully supports regex capture groups (`(\w+)`) and referencing them in the replacement string using `$1`(modern way), or `\1`(old regexbot, legacy way), with support for mixed syntax
 
 ## Commands
 
@@ -21,7 +21,7 @@ A fast, efficient, and feature-rich Telegram bot built with [grammY](https://git
 - `/privacy`: Displays the bot's privacy policy.
 - `s/find/replace/flags`: Performs a regex substitution.
   - **Example:** `s/old/new/gi` replaces all occurrences of "old" (case-insensitive) with "new".
-  - **Example with Groups:** `s/(\w+) (\w+)/$2 $1/`(modern way), or `s/(\w+) (\w+)/\2 \1/`(legacy, regexbot way) swaps the first two words in a message, regexy supports both modes at the same time, mixing(`/$2 \1/`) is supported too.
+  - **Example with Groups:** `s/(\w+) (\w+)/$2 $1/`(modern way), or `s/(\w+) (\w+)/\2 \1/`(old regexbot, legacy way) swaps the first two words in a message, regexy supports both modes at the same time, mixing(`/$2 \1/`) is supported too.
   - **Example with Performance:** `s/complex_pattern/replacement/gip` performs a global, case-insensitive substitution and prints the execution time.
 
 ## Environment Variables
@@ -66,7 +66,7 @@ The project is organized into several modules for clarity and maintainability:
 - **@grammyjs/runner:** For concurrent update processing.
 - **@grammyjs/commands:** For structured command handling.
 - **Bun:** High-performance JavaScript runtime.
-- **bun:sqlite:** Native, fast SQLite driver.
+- **bun:sqlite\:** Native, fast SQLite driver.
 - **Bun Worker API:** For parallel, non-blocking regex execution.
 
 ## License
