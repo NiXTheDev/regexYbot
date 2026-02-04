@@ -62,12 +62,12 @@ The project is organized into several modules for clarity and maintainability:
 
 ## Tech Stack
 
-- **grammY:** Modern Telegram Bot Framework.
-- **@grammyjs/runner:** For concurrent update processing.
-- **@grammyjs/commands:** For structured command handling.
-- **Bun:** High-performance JavaScript runtime.
-- **bun:sqlite\:** Native, fast SQLite driver.
-- **Bun Worker API:** For parallel, non-blocking regex execution.
+- **[grammY](https://grammy.dev):** Modern Telegram Bot Framework.
+- **[@grammyjs/runner](https://grammy.dev/plugins/runner.html):** For concurrent update processing.
+- **[@grammyjs/commands](https://grammy.dev/plugins/commands.html):** For structured command handling.
+- **[Bun](https://bun.sh/):** High-performance JavaScript runtime.
+- **[bun:sqlite](https://bun.sh/docs/api/sqlite):** Bun's native, fast SQLite driver.
+- **[Bun Worker API](https://bun.sh/docs/api/worker):** For parallel, non-blocking regex execution.
 
 ## License
 
