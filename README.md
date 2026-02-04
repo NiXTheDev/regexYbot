@@ -21,7 +21,7 @@ A fast, efficient, and feature-rich Telegram bot built with [grammY](https://git
 - `/privacy`: Displays the bot's privacy policy.
 - `s/find/replace/flags`: Performs a regex substitution.
   - **Example:** `s/old/new/gi` replaces all occurrences of "old" (case-insensitive) with "new".
-  - **Example with Groups:** `s/(\w+) (\w+)/$2 $1/` swaps the first two words in a message.
+  - **Example with Groups:** `s/(\w+) (\w+)/$2 $1/`(modern way), or `s/(\w+) (\w+)/\2 \1/`(legacy, regexbot way) swaps the first two words in a message, regexy supports both modes at the same time, mixing(`/$2 \1/`) is supported too.
   - **Example with Performance:** `s/complex_pattern/replacement/gip` performs a global, case-insensitive substitution and prints the execution time.
 
 ## Environment Variables
