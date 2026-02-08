@@ -1,0 +1,149 @@
+import { Logger } from "./logger";
+import type { SedCommand, TaskMessage } from "./types";
+import {
+	SED_PATTERN,
+	getRegexFlags,
+	escapeForMarkdownV2AndBackslashes,
+} from "./utils";
+import { CONFIG } from "./config";
+import type { Context } from "grammy";
+import type { CommandsFlavor } from "@grammyjs/commands";
+import type { WorkerPool } from "./workerPool";
+
+const { MAX_CHAIN_LENGTH, MAX_MESSAGE_LENGTH, WORKER_TIMEOUT_MS } = CONFIG;
+
+export function parseSedCommands(text: string): string[] {
+	const lines = text.split("\n");
+	const commands: string[] = [];
+	let currentCommand = "";
+
+	for (const line of lines) {
+		if (line.trim().startsWith("s/")) {
+			if (currentCommand) {
+				commands.push(currentCommand.trim());
+			}
+			currentCommand = line;
+		} else if (currentCommand) {
+			currentCommand += "\n" + line;
+		}
+	}
+
+	if (currentCommand) {
+		commands.push(currentCommand.trim());
+	}
+
+	return commands;
+}
+
+type MyContext = Context & CommandsFlavor;
+
+export interface SedHandlerDependencies {
+	workerPool: WorkerPool;
+	sendOrEditReply: (
+		ctx: MyContext,
+		targetMsgId: number,
+		messageText: string,
+		isEdit: boolean,
+	) => Promise<void>;
+}
+
+export class SedHandler {
+	private logger: Logger;
+
+	constructor(private deps: SedHandlerDependencies) {
+		this.logger = new Logger("SedHandler");
+	}
+
+	async handleSedCommand(
+		ctx: MyContext,
+		sedCommands: string[],
+		targetMsgText: string,
+		targetMsgId: number,
+		isEdit: boolean,
+	): Promise<void> {
+		this.logger.debug(
+			`Handling ${sedCommands.length} sed command(s) for targetMsgId: ${targetMsgId}`,
+		);
+		this.logger.debug(`Commands to execute: ${JSON.stringify(sedCommands)}`);
+
+		const hasPerformanceFlag = sedCommands.some((cmd) => {
+			const match = cmd.match(SED_PATTERN);
+			return match
+				? getRegexFlags(match[3]).originalFlags?.toLowerCase().includes("p")
+				: false;
+		});
+
+		const startTime = hasPerformanceFlag ? performance.now() : undefined;
+		let currentText = targetMsgText;
+
+		for (const commandString of sedCommands.slice(0, MAX_CHAIN_LENGTH)) {
+			const match = commandString.match(SED_PATTERN);
+			if (!match) continue;
+
+			const fr = match[1].replace(/\\\//g, "/");
+			const processedTo = match[2]
+				.replace(/\\\//g, "/")
+				.replace(/\\(\d+)/g, "$$$1")
+				.replace(/\\n/g, "\n")
+				.replace(/\\t/g, "\t");
+			const { flags } = getRegexFlags(match[3]);
+			const commandForWorker: SedCommand = {
+				pattern: fr,
+				flags,
+				replacement: processedTo,
+			};
+
+			this.logger.debug(
+				`Executing command: pattern="${commandForWorker.pattern}", flags="${commandForWorker.flags}", replacement="${commandForWorker.replacement}"`,
+			);
+
+			try {
+				const task: TaskMessage = {
+					initialText: currentText,
+					commands: [commandForWorker],
+					includePerformance: hasPerformanceFlag,
+				};
+				const result = await this.deps.workerPool.run(task);
+				if (result.error) {
+					await ctx.reply(`Error during substitution: ${result.error}`);
+					return;
+				}
+				currentText = result.result;
+				this.logger.debug(
+					`Command result. New text length: ${currentText.length}`,
+				);
+			} catch (error: unknown) {
+				this.logger.error(String(error), "Worker pool task failed");
+				const errorMessage =
+					error instanceof Error && error.message.includes("timed out")
+						? `Regex operation timed out after ${WORKER_TIMEOUT_MS / 1000}s. Please use a simpler pattern.`
+						: "The substitution process failed.";
+				await ctx.reply(errorMessage);
+				return;
+			}
+		}
+
+		let totalPerformanceMs: number | null = null;
+		if (hasPerformanceFlag && startTime !== undefined) {
+			totalPerformanceMs = performance.now() - startTime;
+		}
+
+		let finalMessage = currentText.slice(0, MAX_MESSAGE_LENGTH);
+		if (totalPerformanceMs !== null) {
+			const performanceInfo = ` (⏱️ ${totalPerformanceMs.toFixed(2)}ms)`;
+			if (finalMessage.length + performanceInfo.length > MAX_MESSAGE_LENGTH) {
+				finalMessage =
+					finalMessage.slice(0, MAX_MESSAGE_LENGTH - performanceInfo.length) +
+					performanceInfo;
+			} else {
+				finalMessage += performanceInfo;
+			}
+		}
+		await this.deps.sendOrEditReply(
+			ctx,
+			targetMsgId,
+			escapeForMarkdownV2AndBackslashes(finalMessage),
+			isEdit,
+		);
+	}
+}

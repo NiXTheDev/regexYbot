@@ -4,18 +4,16 @@ import {
 	type CommandsFlavor,
 } from "@grammyjs/commands";
 import { run } from "@grammyjs/runner";
-import { sql, SQL } from "bun";
+import { SQL } from "bun";
 import { writeFileSync } from "node:fs";
 import { Bot, Context, GrammyError } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { Logger } from "./logger";
-import { ResultMessage, SedCommand, TaskMessage } from "./types";
-import {
-	escapeForMarkdownV2AndBackslashes,
-	getRegexFlags,
-	SED_PATTERN,
-} from "./utils";
+import { SED_PATTERN } from "./utils";
 import { CONFIG } from "./config";
+import { DatabaseService } from "./database";
+import { WorkerPool } from "./workerPool";
+import { parseSedCommands, SedHandler } from "./sed";
 
 // --- Configuration ---
 const token = process.env.TOKEN;
@@ -25,17 +23,7 @@ if (!token) {
 	process.exit(1);
 }
 const base = (process.env.BASE_URL || "https://api.telegram.org").trim();
-const {
-	CLEANUP_INTERVAL_MS,
-	MAX_CHAIN_LENGTH,
-	MAX_MESSAGE_LENGTH,
-	WORKER_POOL_SIZE,
-	MAX_HISTORY_PER_CHAT,
-	HISTORY_QUERY_LIMIT,
-	WORKER_TIMEOUT_MS,
-	RETRY_MAX_RETRIES,
-	RETRY_MAX_DELAY_MS,
-} = CONFIG;
+const { WORKER_POOL_SIZE, RETRY_MAX_RETRIES, RETRY_MAX_DELAY_MS } = CONFIG;
 
 // --- Type Definitions ---
 type MyContext = Context & CommandsFlavor;
@@ -87,230 +75,12 @@ try {
 	process.exit(1);
 }
 
-// --- Database Service ---
-class DatabaseService {
-	private db: SQL;
-	constructor(database: SQL) {
-		this.db = database;
-	}
-
-	async cleanupOldEntries(): Promise<void> {
-		const cutoffTime = new Date(Date.now() - CLEANUP_INTERVAL_MS).toISOString();
-		const historyResult =
-			await db`DELETE FROM message_history WHERE timestamp < ${cutoffTime}`;
-		const repliesResult =
-			await db`DELETE FROM bot_replies WHERE timestamp < ${cutoffTime}`;
-		if (historyResult.count > 0 || repliesResult.count > 0) {
-			logger.info(
-				`Cleaned up ${historyResult.count} history entries and ${repliesResult.count} reply mappings.`,
-			);
-		}
-	}
-
-	async storeMessageInHistory(
-		chatId: number,
-		messageId: number,
-		text: string | undefined,
-	): Promise<void> {
-		if (text && SED_PATTERN.test(text)) return;
-		const [{ count }] =
-			await db`SELECT COUNT(*) as count FROM message_history WHERE chat_id = ${chatId}`;
-		if (count >= MAX_HISTORY_PER_CHAT) {
-			await db`DELETE FROM message_history WHERE chat_id = ${chatId} AND message_id IN (SELECT message_id FROM message_history WHERE chat_id = ${chatId} ORDER BY timestamp ASC LIMIT ${count - MAX_HISTORY_PER_CHAT + 1})`;
-		}
-		await db`INSERT OR REPLACE INTO message_history (chat_id, message_id, text) VALUES (${chatId}, ${messageId}, ${text ?? ""})`;
-	}
-
-	async storeBotReplyInHistory(
-		chatId: number,
-		messageId: number,
-		text: string | undefined,
-	): Promise<void> {
-		await db`INSERT OR REPLACE INTO message_history (chat_id, message_id, text) VALUES (${chatId}, ${messageId}, ${text ?? ""})`;
-	}
-
-	async findTargetMessage(
-		ctx: MyContext,
-		match: RegExpMatchArray,
-		excludeMessageId?: number,
-	): Promise<{ targetMsgText?: string; targetMsgId?: number }> {
-		if (ctx.msg?.reply_to_message) {
-			logger.debug("Found target in reply_to_message.");
-			return {
-				targetMsgText:
-					ctx.msg.reply_to_message.text || ctx.msg.reply_to_message.caption,
-				targetMsgId: ctx.msg.reply_to_message.message_id,
-			};
-		}
-		const chatId = ctx.chat?.id;
-		if (chatId === undefined) return {};
-		const fr = match[1].replace(/\\\//g, "/");
-		const regex = new RegExp(fr, getRegexFlags(match[3]).flags);
-		const rows =
-			await db`SELECT message_id, text FROM message_history WHERE chat_id = ${chatId} ${excludeMessageId ? sql`AND message_id != ${excludeMessageId}` : sql``} ORDER BY timestamp DESC LIMIT ${HISTORY_QUERY_LIMIT}`;
-		for (const row of rows) {
-			if (row.text && regex.test(row.text)) {
-				logger.debug(`Found target in history (msg_id: ${row.message_id}).`);
-				return { targetMsgText: row.text, targetMsgId: row.message_id };
-			}
-		}
-		logger.debug("No matching target found in history.");
-		return {};
-	}
-
-	async storeBotReplyMapping(
-		targetMessageId: number,
-		chatId: number,
-		botMessageId: number,
-	): Promise<void> {
-		await db`INSERT OR REPLACE INTO bot_replies (target_message_id, chat_id, bot_message_id) VALUES (${targetMessageId}, ${chatId}, ${botMessageId})`;
-	}
-
-	async getBotReplyMessageId(
-		targetMessageId: number,
-		chatId: number,
-	): Promise<number | undefined> {
-		return (
-			await db`SELECT bot_message_id FROM bot_replies WHERE target_message_id = ${targetMessageId} AND chat_id = ${chatId}`
-		)[0]?.bot_message_id;
-	}
-}
 const dbService = new DatabaseService(db);
 
-// --- Worker Pool Implementation ---
-class WorkerPool {
-	private workers: Worker[];
-	private taskQueue: Array<{
-		task: TaskMessage;
-		resolve: (value: ResultMessage) => void;
-		reject: (reason?: unknown) => void;
-	}> = [];
-	private pendingTasks = new Map<
-		Worker,
-		{
-			resolve: (value: ResultMessage) => void;
-			reject: (reason?: unknown) => void;
-		}
-	>();
-	private timeouts = new Map<Worker, NodeJS.Timeout>();
-	private workerScript: string;
-
-	constructor(poolSize: number, workerScript: string) {
-		this.workerScript = workerScript;
-		logger.info(`Initializing worker pool with size ${poolSize}...`);
-		this.workers = Array.from({ length: poolSize }, (_, i) => {
-			logger.debug(
-				`Creating worker ${i + 1}/${poolSize} from script: ${workerScript}`,
-			);
-			return this.createWorker(i + 1, poolSize);
-		});
-		logger.info("Worker pool initialized.");
-	}
-
-	private createWorker(_index: number, _total: number): Worker {
-		const worker = new Worker(this.workerScript);
-		worker.onmessage = (event) => this.handleWorkerMessage(worker, event.data);
-		worker.onerror = (error) => this.handleWorkerError(worker, error);
-		return worker;
-	}
-
-	private replaceWorker(deadWorker: Worker): void {
-		const index = this.workers.indexOf(deadWorker);
-		if (index !== -1) {
-			logger.info(`Replacing worker ${index + 1}/${this.workers.length}...`);
-			const newWorker = this.createWorker(index + 1, this.workers.length);
-			this.workers[index] = newWorker;
-		}
-	}
-
-	private handleWorkerMessage(worker: Worker, result: ResultMessage) {
-		logger.debug("Received result from a worker.");
-		const timeout = this.timeouts.get(worker);
-		if (timeout) {
-			clearTimeout(timeout);
-			this.timeouts.delete(worker);
-		}
-		const pending = this.pendingTasks.get(worker);
-		if (pending) {
-			logger.debug("Resolving promise for the completed task.");
-			pending.resolve(result);
-			this.pendingTasks.delete(worker);
-		} else {
-			logger.error(
-				"Received a message from a worker that wasn't handling a task.",
-			);
-		}
-		this.processQueue();
-	}
-
-	private handleWorkerError(worker: Worker, error: ErrorEvent) {
-		logger.error(error.error, "WORKER ERROR");
-		const timeout = this.timeouts.get(worker);
-		if (timeout) {
-			clearTimeout(timeout);
-			this.timeouts.delete(worker);
-		}
-		const pending = this.pendingTasks.get(worker);
-		if (pending) {
-			pending.reject(error.error);
-			this.pendingTasks.delete(worker);
-		}
-		this.replaceWorker(worker);
-		this.processQueue();
-	}
-
-	private handleWorkerTimeout(worker: Worker): void {
-		logger.warn("Worker task timed out, terminating worker.");
-		const timeout = this.timeouts.get(worker);
-		if (timeout) {
-			clearTimeout(timeout);
-			this.timeouts.delete(worker);
-		}
-		const pending = this.pendingTasks.get(worker);
-		if (pending) {
-			pending.reject(
-				new Error(`Regex operation timed out after ${WORKER_TIMEOUT_MS}ms`),
-			);
-			this.pendingTasks.delete(worker);
-		}
-		worker.terminate();
-		this.replaceWorker(worker);
-		this.processQueue();
-	}
-
-	private processQueue() {
-		if (this.taskQueue.length === 0) {
-			logger.debug("Task queue is empty.");
-			return;
-		}
-		const availableWorker = this.workers.find((w) => !this.pendingTasks.has(w));
-		if (!availableWorker) {
-			logger.debug("All workers busy, task remains in queue.");
-			return;
-		}
-		const { task, resolve, reject } = this.taskQueue.shift()!;
-		logger.debug("Assigning task to an available worker.");
-		this.pendingTasks.set(availableWorker, { resolve, reject });
-
-		const timeout = setTimeout(() => {
-			this.handleWorkerTimeout(availableWorker);
-		}, WORKER_TIMEOUT_MS);
-		this.timeouts.set(availableWorker, timeout);
-
-		availableWorker.postMessage(task);
-	}
-
-	public run(taskData: TaskMessage): Promise<ResultMessage> {
-		logger.debug("Adding new task to queue.");
-		return new Promise((resolve, reject) => {
-			this.taskQueue.push({ task: taskData, resolve, reject });
-			this.processQueue();
-		});
-	}
-}
+// --- Worker Pool Setup ---
 const workerPool = new WorkerPool(WORKER_POOL_SIZE, "./hellspawn.ts");
 
-// --- Bot Logic ---
+// --- Sed Handler Setup ---
 async function sendOrEditReply(
 	ctx: MyContext,
 	targetMsgId: number,
@@ -390,30 +160,9 @@ async function sendOrEditReply(
 	}
 }
 
-// --- FINAL: Simple, Robust Line-by-Line Parser ---
-function parseSedCommands(text: string): string[] {
-	const lines = text.split("\n");
-	const commands: string[] = [];
-	let currentCommand = "";
+const sedHandler = new SedHandler({ workerPool, sendOrEditReply });
 
-	for (const line of lines) {
-		if (line.trim().startsWith("s/")) {
-			if (currentCommand) {
-				commands.push(currentCommand.trim());
-			}
-			currentCommand = line;
-		} else if (currentCommand) {
-			currentCommand += "\n" + line;
-		}
-	}
-
-	if (currentCommand) {
-		commands.push(currentCommand.trim());
-	}
-
-	return commands;
-}
-
+// --- Bot Logic ---
 async function handleTextMessage(
 	ctx: MyContext,
 	messageText: string | undefined,
@@ -442,7 +191,7 @@ async function handleTextMessage(
 			logger.debug(
 				`Found valid target. Proceeding with handleSedCommand (isEdit: ${isEdit}).`,
 			);
-			await handleSedCommand(
+			await sedHandler.handleSedCommand(
 				ctx,
 				sedCommands,
 				targetMsgText,
@@ -460,97 +209,6 @@ async function handleTextMessage(
 			logger.debug("Target message is a sed command, ignoring.");
 		}
 	}
-}
-
-async function handleSedCommand(
-	ctx: MyContext,
-	sedCommands: string[],
-	targetMsgText: string,
-	targetMsgId: number,
-	isEdit: boolean,
-) {
-	logger.debug(
-		`Handling ${sedCommands.length} sed command(s) for targetMsgId: ${targetMsgId}`,
-	);
-	logger.debug(`Commands to execute: ${JSON.stringify(sedCommands)}`);
-
-	const hasPerformanceFlag = sedCommands.some((cmd) => {
-		const match = cmd.match(SED_PATTERN);
-		return match
-			? getRegexFlags(match[3]).originalFlags?.toLowerCase().includes("p")
-			: false;
-	});
-
-	const startTime = hasPerformanceFlag ? performance.now() : undefined;
-	let currentText = targetMsgText;
-
-	for (const commandString of sedCommands.slice(0, MAX_CHAIN_LENGTH)) {
-		const match = commandString.match(SED_PATTERN);
-		if (!match) continue;
-
-		const fr = match[1].replace(/\\\//g, "/");
-		const processedTo = match[2]
-			.replace(/\\\//g, "/")
-			.replace(/\\(\d+)/g, "$$$1")
-			.replace(/\\n/g, "\n")
-			.replace(/\\t/g, "\t");
-		const { flags } = getRegexFlags(match[3]);
-		const commandForWorker: SedCommand = {
-			pattern: fr,
-			flags,
-			replacement: processedTo,
-		};
-
-		logger.debug(
-			`Executing command: pattern="${commandForWorker.pattern}", flags="${commandForWorker.flags}", replacement="${commandForWorker.replacement}"`,
-		);
-
-		try {
-			const task: TaskMessage = {
-				initialText: currentText,
-				commands: [commandForWorker],
-				includePerformance: hasPerformanceFlag,
-			};
-			const result = await workerPool.run(task);
-			if (result.error) {
-				await ctx.reply(`Error during substitution: ${result.error}`);
-				return;
-			}
-			currentText = result.result;
-			logger.debug(`Command result. New text length: ${currentText.length}`);
-		} catch (error: unknown) {
-			logger.error(String(error), "Worker pool task failed");
-			const errorMessage =
-				error instanceof Error && error.message.includes("timed out")
-					? `Regex operation timed out after ${WORKER_TIMEOUT_MS / 1000}s. Please use a simpler pattern.`
-					: "The substitution process failed.";
-			await ctx.reply(errorMessage);
-			return;
-		}
-	}
-
-	let totalPerformanceMs: number | null = null;
-	if (hasPerformanceFlag && startTime !== undefined) {
-		totalPerformanceMs = performance.now() - startTime;
-	}
-
-	let finalMessage = currentText.slice(0, MAX_MESSAGE_LENGTH);
-	if (totalPerformanceMs !== null) {
-		const performanceInfo = ` (⏱️ ${totalPerformanceMs.toFixed(2)}ms)`;
-		if (finalMessage.length + performanceInfo.length > MAX_MESSAGE_LENGTH) {
-			finalMessage =
-				finalMessage.slice(0, MAX_MESSAGE_LENGTH - performanceInfo.length) +
-				performanceInfo;
-		} else {
-			finalMessage += performanceInfo;
-		}
-	}
-	await sendOrEditReply(
-		ctx,
-		targetMsgId,
-		escapeForMarkdownV2AndBackslashes(finalMessage),
-		isEdit,
-	);
 }
 
 // --- Command Group ---

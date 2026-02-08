@@ -16,27 +16,27 @@ High-level plan for future improvements to regexYbot. This is intentionally non-
 
 Goal: keep `index.ts` as a thin composition root.
 
-- [ ] Extract DB-related concerns into a dedicated module, e.g. `database.ts`:
+- [x] Extract DB-related concerns into a dedicated module, e.g. `database.ts`:
   - SQL instance creation.
   - Table/index creation.
   - `DatabaseService` class.
-- [ ] Extract worker pool concerns to e.g. `workerPool.ts`:
+- [x] Extract worker pool concerns to e.g. `workerPool.ts`:
   - `WorkerPool` class.
   - Dependencies injected via constructor (`CONFIG`, logger, worker script path).
-- [ ] Extract sed-specific logic to e.g. `sed.ts`:
+- [x] Extract sed-specific logic to e.g. `sed.ts`:
   - `parseSedCommands`.
-  - Possibly higher-level helpers that orchestrate sed command chains, parameterized by `workerPool` and `dbService`.
-- [ ] Keep `bot` wiring and grammY specifics in `index.ts` (or split later into a `bot.ts`) and update imports accordingly.
-- [ ] Verify there are no circular dependencies between the new modules.
+  - `SedHandler` class with dependency injection for worker pool and reply function.
+- [x] Keep `bot` wiring and grammY specifics in `index.ts` and update imports accordingly.
+- [x] Verify there are no circular dependencies between the new modules.
 
 ## 3. DB service & tests: remove duplication
 
-- [ ] Refactor `DatabaseService` to use `this.db` consistently internally (no reliance on the outer `db` variable).
-- [ ] Export `DatabaseService` from the new DB module and use it directly in tests instead of `TestDatabaseService`.
-- [ ] Update `database.test.ts` to:
+- [x] Refactor `DatabaseService` to use `this.db` consistently internally (no reliance on the outer `db` variable).
+- [x] Export `DatabaseService` from the new DB module and use it directly in tests instead of `TestDatabaseService`.
+- [x] Update `database.test.ts` to:
   - Construct `DatabaseService` with its own in-memory `SQL` instance.
   - Import `CONFIG` from `config.ts` where limits are asserted (e.g., `MAX_HISTORY_PER_CHAT`).
-- [ ] Add/adjust tests to ensure behavior stays identical during the refactor (especially around cleanup and history limits).
+- [x] Add/adjust tests to ensure behavior stays identical during the refactor (especially around cleanup and history limits).
 
 ## 4. Worker pool v2: lazy, bounded, and load-aware
 

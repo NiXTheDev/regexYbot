@@ -1,101 +1,11 @@
 import { describe, test, expect, beforeAll } from "bun:test";
 import { SQL } from "bun";
-
-const CONFIG = {
-	CLEANUP_INTERVAL_MS: 48 * 60 * 60 * 1000,
-	CLEANUP_HOURS: 48,
-	MAX_CHAIN_LENGTH: 5,
-	MAX_MESSAGE_LENGTH: 4096,
-	WORKER_POOL_SIZE: 4,
-	MAX_HISTORY_PER_CHAT: 20,
-	HISTORY_QUERY_LIMIT: 10,
-	WORKER_TIMEOUT_MS: 60 * 1000,
-} as const;
-
-class TestDatabaseService {
-	private db: SQL;
-
-	constructor(database: SQL) {
-		this.db = database;
-	}
-
-	async cleanupOldEntries(): Promise<void> {
-		const cutoffTime = new Date(
-			Date.now() - CONFIG.CLEANUP_INTERVAL_MS,
-		).toISOString();
-		await this.db`DELETE FROM message_history WHERE timestamp < ${cutoffTime}`;
-		await this.db`DELETE FROM bot_replies WHERE timestamp < ${cutoffTime}`;
-	}
-
-	async storeMessageInHistory(
-		chatId: number,
-		messageId: number,
-		text: string | undefined,
-	): Promise<void> {
-		const [{ count }] = await this
-			.db`SELECT COUNT(*) as count FROM message_history WHERE chat_id = ${chatId}`;
-		if (count >= CONFIG.MAX_HISTORY_PER_CHAT) {
-			await this
-				.db`DELETE FROM message_history WHERE chat_id = ${chatId} AND message_id IN (SELECT message_id FROM message_history WHERE chat_id = ${chatId} ORDER BY timestamp ASC LIMIT ${count - CONFIG.MAX_HISTORY_PER_CHAT + 1})`;
-		}
-		await this
-			.db`INSERT OR REPLACE INTO message_history (chat_id, message_id, text) VALUES (${chatId}, ${messageId}, ${text ?? ""})`;
-	}
-
-	async storeBotReplyInHistory(
-		chatId: number,
-		messageId: number,
-		text: string | undefined,
-	): Promise<void> {
-		await this
-			.db`INSERT OR REPLACE INTO message_history (chat_id, message_id, text) VALUES (${chatId}, ${messageId}, ${text ?? ""})`;
-	}
-
-	async storeBotReplyMapping(
-		targetMessageId: number,
-		chatId: number,
-		botMessageId: number,
-	): Promise<void> {
-		await this
-			.db`INSERT OR REPLACE INTO bot_replies (target_message_id, chat_id, bot_message_id) VALUES (${targetMessageId}, ${chatId}, ${botMessageId})`;
-	}
-
-	async getBotReplyMessageId(
-		targetMessageId: number,
-		chatId: number,
-	): Promise<number | undefined> {
-		return (
-			await this
-				.db`SELECT bot_message_id FROM bot_replies WHERE target_message_id = ${targetMessageId} AND chat_id = ${chatId}`
-		)[0]?.bot_message_id;
-	}
-
-	async findMessagesInHistory(
-		chatId: number,
-	): Promise<Array<{ message_id: number; text: string | null }>> {
-		return await this
-			.db`SELECT message_id, text FROM message_history WHERE chat_id = ${chatId} ORDER BY timestamp DESC`;
-	}
-
-	async findRepliesInHistory(
-		chatId: number,
-	): Promise<Array<{ target_message_id: number; bot_message_id: number }>> {
-		return await this
-			.db`SELECT target_message_id, bot_message_id FROM bot_replies WHERE chat_id = ${chatId}`;
-	}
-
-	async deleteAllMessages(chatId: number): Promise<void> {
-		await this.db`DELETE FROM message_history WHERE chat_id = ${chatId}`;
-	}
-
-	async deleteAllReplies(chatId: number): Promise<void> {
-		await this.db`DELETE FROM bot_replies WHERE chat_id = ${chatId}`;
-	}
-}
+import { DatabaseService } from "../database";
+import { CONFIG } from "../config";
 
 describe("DatabaseService", () => {
 	let db: SQL;
-	let dbService: TestDatabaseService;
+	let dbService: DatabaseService;
 
 	beforeAll(async () => {
 		db = new SQL("sqlite://:memory:");
@@ -117,7 +27,7 @@ describe("DatabaseService", () => {
 				PRIMARY KEY (target_message_id, chat_id)
 			)
 		`;
-		dbService = new TestDatabaseService(db);
+		dbService = new DatabaseService(db);
 	});
 
 	describe("storeMessageInHistory", () => {
