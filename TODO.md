@@ -89,6 +89,15 @@ This is a larger change; consider doing it in a separate branch.
 - [x] Ensure shutdown handling is idempotent and doesn't throw inside the signal handler.
 - [ ] Consider adding a small integration-style test or manual test plan for graceful shutdown (particularly in Docker).
 
+## 7.5. Smart worker queue drain (shutdown enhancement)
+
+- [ ] Implement intelligent queue draining during shutdown:
+  - Queue all pending Telegram updates for workers instead of rejecting them.
+  - Scale up workers temporarily past the normal limit during shutdown.
+  - Process all queued tasks and send replies/edits before exiting.
+  - Complete shutdown within Docker's 10-second grace period (or document `--stop-timeout` requirement).
+- [ ] Add configuration option for graceful drain vs immediate shutdown.
+
 ## 8. Persistence strategy (confirm and document in-memory DB)
 
 - [ ] Keep the `sqlite://:memory:` database as the default and only supported mode for now.

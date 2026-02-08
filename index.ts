@@ -289,10 +289,9 @@ async function gracefulShutdown(signal: string): Promise<void> {
 		logger.info("Stopping bot from accepting new updates...");
 		await bot.stop();
 
-		// Drain the worker pool - finish processing all pending tasks
-		// This scales up workers temporarily to finish faster
-		logger.info("Draining worker pool (finishing pending tasks)...");
-		await workerPool.drainAndShutdown();
+		// Shut down worker pool - rejects queued tasks and terminates workers
+		logger.info("Shutting down worker pool...");
+		workerPool.shutdown();
 
 		logger.info("Graceful shutdown complete.");
 		process.exit(0);
