@@ -95,6 +95,37 @@ The project is organized into several modules for clarity and maintainability:
 - **[bun:sqlite](https://bun.sh/docs/api/sqlite):** Bun's native, fast SQLite driver.
 - **[Bun Worker API](https://bun.sh/docs/api/worker):** For parallel, non-blocking regex execution.
 
+## Branching Strategy & Releases
+
+This project uses a two-branch workflow:
+
+### `main` branch (Stable)
+
+- Contains production-ready code
+- Merges happen from `dev` via pull requests
+- Docker images are tagged with:
+  - `release` - always points to latest stable
+  - Version numbers from `package.json` (e.g., `0.1.7.1`, `0.1.7`, `0.1`)
+  - Git commit hash
+
+### `dev` branch (Development)
+
+- Active development happens here
+- Feature branches merge into `dev`
+- Docker images are tagged with:
+  - `dev` - latest development build
+  - `next` - upcoming release preview
+  - `latest` - also points to dev (for convenience)
+  - `dev-<version>` - version-specific dev build
+  - `dev-<commit>` - commit-specific dev build
+
+### Workflow
+
+1. Create feature branches from `dev`
+2. Open PRs targeting `dev`
+3. When ready for release, open PR from `dev` to `main`
+4. After merging to `main`, Docker images are built with release tags
+
 ## License
 
 [MIT](LICENSE)
