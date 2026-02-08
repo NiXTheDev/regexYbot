@@ -28,14 +28,25 @@ A fast, efficient, and feature-rich Telegram bot built with [grammY](https://git
 
 Configure the bot's behavior with the following environment variables:
 
-| Variable           | Required | Description                                                                                              | Default Value                                |
-| :----------------- | :------: | :------------------------------------------------------------------------------------------------------- | :------------------------------------------- |
-| `TOKEN`            | **Yes**  | Your Telegram bot token.                                                                                 | —                                            |
-| `BASE_URL`         |    No    | Base URL for the Telegram Bot API, useful for local testing.                                             | `https://api.telegram.org`                   |
-| `LOG_LEVEL`        |    No    | Sets the minimum log level. <br>**Available levels:** `none`, `debug`, `info`, `warn`, `error`, `fatal`. | `debug` (development)<br>`info` (production) |
-| `LOG_TEMPLATE`     |    No    | Customizes the log output format.                                                                        | `[{level}: {module}]: {message}`             |
-| `NODE_ENV`         |    No    | Set to `production` to default the log level to `info`.                                                  | —                                            |
-| `WORKER_POOL_SIZE` |    No    | Sets the number of worker threads for regex processing.                                                  | 4                                            |
+| Variable                  | Required | Description                                                                                              | Default Value                                |
+| :------------------------ | :------: | :------------------------------------------------------------------------------------------------------- | :------------------------------------------- |
+| `TOKEN`                   | **Yes**  | Your Telegram bot token.                                                                                 | —                                            |
+| `BASE_URL`                |    No    | Base URL for the Telegram Bot API, useful for local testing.                                             | `https://api.telegram.org`                   |
+| `LOG_LEVEL`               |    No    | Sets the minimum log level. <br>**Available levels:** `none`, `debug`, `info`, `warn`, `error`, `fatal`. | `debug` (development)<br>`info` (production) |
+| `LOG_TEMPLATE`            |    No    | Customizes the log output format.                                                                        | `[{level}: {module}]: {message}`             |
+| `NODE_ENV`                |    No    | Set to `production` to default the log level to `info`.                                                  | —                                            |
+| `WORKER_POOL_SIZE`        |    No    | Sets the number of worker threads for regex processing.                                                  | 4                                            |
+| `WORKER_TIMEOUT_MS`       |    No    | Maximum time a regex operation can run before being terminated (milliseconds).                           | 60000                                        |
+| `MAX_CHAIN_LENGTH`        |    No    | Maximum number of sed commands that can be chained together.                                             | 5                                            |
+| `MAX_MESSAGE_LENGTH`      |    No    | Maximum length of the bot's response message.                                                            | 4096                                         |
+| `CLEANUP_INTERVAL_MS`     |    No    | How often to clean up old message history (milliseconds).                                                | 172800000 (48 hours)                         |
+| `MAX_HISTORY_PER_CHAT`    |    No    | Maximum number of messages to keep in history per chat.                                                  | 20                                           |
+| `HISTORY_QUERY_LIMIT`     |    No    | Maximum number of messages to search when finding a target.                                              | 10                                           |
+| `RETRY_MAX_RETRIES`       |    No    | Maximum number of retries for Telegram API calls.                                                        | 3                                            |
+| `RETRY_MAX_DELAY_MS`      |    No    | Maximum delay between retries for Telegram API calls (milliseconds).                                     | 30000                                        |
+| `ENABLE_FILE_HEALTHCHECK` |    No    | Enable file-based healthcheck for Docker environments.                                                   | `false`                                      |
+| `LIVENESS_FILE`           |    No    | Path to the liveness file when healthcheck is enabled.                                                   | `/tmp/bot-alive`                             |
+| `LIVENESS_INTERVAL_MS`    |    No    | How often to update the liveness file (milliseconds).                                                    | 30000                                        |
 
 ## Setup & Run
 
@@ -50,15 +61,30 @@ Configure the bot's behavior with the following environment variables:
     bun index.ts
     ```
 
+## Data Persistence
+
+**Important:** This bot uses an **in-memory SQLite database** (`sqlite://:memory:`) by default. This means:
+
+- **All message history and reply mappings are ephemeral** - they are lost when the bot restarts
+- The retention window (48 hours by default) is designed to support Telegram's edit window and reply-less sed behavior
+- No persistent storage is required or used
+- For production deployments, this design is intentional - the bot does not store any data permanently
+
+If you need persistent storage (not recommended for this use case), you would need to modify `index.ts` to use a file-based SQLite database instead.
+
 ## Project Structure
 
 The project is organized into several modules for clarity and maintainability:
 
-- `index.ts`: The main application entry point, handling Telegram bot logic.
-- `hellspawn.ts`: The worker script that performs the actual regex substitution.
+- `index.ts`: The main application entry point and bot wiring. Thin composition root that orchestrates other modules.
+- `config.ts`: Centralized configuration with typed env var loading and validation.
+- `database.ts`: Database service layer with `DatabaseService` class for message history and reply tracking.
+- `workerPool.ts`: Worker pool management for concurrent regex processing.
+- `sed.ts`: Sed command parsing and handling logic (`parseSedCommands`, `SedHandler`).
+- `hellspawn.ts`: The worker script that performs the actual regex substitution in separate threads.
 - `logger.ts`: A custom, configurable logging utility.
 - `types.ts`: Contains shared TypeScript types and interfaces.
-- `utils.ts`: Houses shared helper functions.
+- `utils.ts`: Houses shared helper functions (regex patterns, escaping, flag normalization).
 
 ## Tech Stack
 

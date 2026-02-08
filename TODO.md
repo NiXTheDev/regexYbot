@@ -100,15 +100,15 @@ This is a larger change; consider doing it in a separate branch.
 
 ## 8. Persistence strategy (confirm and document in-memory DB)
 
-- [ ] Keep the `sqlite://:memory:` database as the default and only supported mode for now.
-- [ ] Explicitly document in README and/or comments near DB initialization that:
+- [x] Keep the `sqlite://:memory:` database as the default and only supported mode for now.
+- [x] Explicitly document in README and/or comments near DB initialization that:
   - All history and mappings are ephemeral and reset on process restart.
-  - The retention window is intended only to support Telegram’s edit window and reply-less sed behavior.
-- [ ] Optionally, centralize the “retention is short-lived and ephemeral” rationale in `config.ts` near `CLEANUP_INTERVAL_MS` and related knobs.
+  - The retention window is intended only to support Telegram's edit window and reply-less sed behavior.
+- [x] Optionally, centralize the "retention is short-lived and ephemeral" rationale in `config.ts` near `CLEANUP_INTERVAL_MS` and related knobs.
 
 ## 9. Documentation & meta files
 
-- [ ] After major structural changes (config, module splits, worker pool v2), update:
+- [x] After major structural changes (config, module splits, worker pool v2), update:
   - `README.md` (setup, behavior, and any changed env knobs).
   - `AGENTS.md` (architecture overview, key module locations, worker pool behavior).
 - [ ] Optionally maintain a short changelog entry explaining the worker pool v2 and config refactor for future contributors.

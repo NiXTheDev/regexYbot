@@ -131,10 +131,10 @@ Healthcheck behavior and the optional file-based liveness probe are documented i
 ### Big-picture flow
 
 - **Telegram → grammY → Bot logic → Worker pool → Telegram**
-  - Incoming updates are handled by a grammY `Bot` in `index.ts` with the `@grammyjs/commands` plugin and `@grammyjs/runner` to process updates concurrently.
+  - Incoming updates are handled by a grammY `Bot` in `index.ts` (thin composition root) with the `@grammyjs/commands` plugin and `@grammyjs/runner` to process updates concurrently.
   - The bot listens to `message` and `edited_message` updates and routes both through `handleTextMessage`.
-  - `handleTextMessage` stores non-command messages in an in-memory SQLite history, then looks for sed-style commands (`s/pattern/replacement/flags`).
-  - For valid sed commands, it uses `DatabaseService` to locate the target message (reply target or recent history), then delegates substitution to a `WorkerPool` backed by `hellspawn.ts` worker threads.
+  - `handleTextMessage` stores non-command messages in an in-memory SQLite history via `DatabaseService`, then looks for sed-style commands (`s/pattern/replacement/flags`).
+  - For valid sed commands, it uses `DatabaseService` to locate the target message (reply target or recent history), then delegates to `SedHandler` which orchestrates the substitution chain using `WorkerPool` backed by `hellspawn.ts` worker threads.
   - Results are escaped for Telegram MarkdownV2 and sent back either as a new reply or by editing a previous bot reply, tracked via `bot_replies` in the SQLite database.
 
 ### Data & persistence
@@ -143,11 +143,13 @@ Healthcheck behavior and the optional file-based liveness probe are documented i
   - `index.ts` creates an in-memory SQLite database (`sqlite://:memory:`) with two tables:
     - `message_history(chat_id, message_id, text, timestamp)` – stores a bounded backlog of recent messages per chat.
     - `bot_replies(target_message_id, chat_id, bot_message_id, timestamp)` – maps original messages to the bot's reply message IDs.
-  - `DatabaseService` (defined inside `index.ts`) encapsulates:
+  - **All data is ephemeral** – the in-memory database resets on every process restart. The retention window (48 hours by default) is intended only to support Telegram's edit window and reply-less sed behavior.
+  - `DatabaseService` (defined in `database.ts`) encapsulates:
     - `storeMessageInHistory` / `storeBotReplyInHistory`: insert or replace messages and bot replies, while enforcing `MAX_HISTORY_PER_CHAT` from `CONFIG`.
     - `findTargetMessage`: given a sed command and context, searches the reply target or recent history (`HISTORY_QUERY_LIMIT`) for the first message whose text matches the regex.
     - `storeBotReplyMapping` / `getBotReplyMessageId`: track and retrieve which bot message replied to which original message, used for edits.
     - `cleanupOldEntries`: opportunistic cleanup run after each update that deletes history and reply mappings older than `CLEANUP_INTERVAL_MS`.
+    - Helper methods for testing: `findMessagesInHistory`, `findRepliesInHistory`, `deleteAllMessages`, `deleteAllReplies`.
 
 ### Sed command parsing & execution
 
@@ -156,19 +158,20 @@ Healthcheck behavior and the optional file-based liveness probe are documented i
   - `index.ts` contains `parseSedCommands`, which splits multi-line input into one or more `s/.../.../flags` commands, preserving multi-line replacements.
 - **Flags & replacements:**
   - `getRegexFlags` in `utils.ts` normalizes flags: deduplicates, lowercases, filters to safe JavaScript regex flags (`gimsyu`), and preserves the original flag string (for detecting the custom `p` performance flag).
-  - `handleSedCommand` in `index.ts`:
+  - `handleSedCommand` in `sed.ts` (via `SedHandler` class):
     - Enforces `MAX_CHAIN_LENGTH` from `CONFIG` to bound how many chained commands are applied.
-    - Normalizes patterns and replacements (unescapes `\/`, converts `\1`-style capture group references into JavaScript replacement syntax, expands `\n`/`\t`).
+    - Normalizes patterns and replacements (unescapes `\/`, converts `\1`-style capture group references into JavaScript replacement syntax, expands `\n`/\t`).
     - Determines whether performance timing should be included based on the `p` flag in any command.
 
 ### Worker pool & concurrency
 
-- **Main-thread worker pool (`WorkerPool` in `index.ts`):**
+- **Main-thread worker pool (`WorkerPool` in `workerPool.ts`):**
   - Lazily initialized with `WORKER_POOL_SIZE` workers, all running `hellspawn.ts`.
   - Maintains a queue of `TaskMessage`s and a `pendingTasks` map from `Worker` → `{resolve, reject}`.
   - `run(task)` enqueues work and ensures only idle workers are assigned new tasks.
   - Each task is guarded by a timeout (`WORKER_TIMEOUT_MS`): on timeout, the worker is terminated, the promise rejects with a user-facing timeout error, and the worker is replaced.
   - On successful completion, `handleWorkerMessage` resolves the corresponding promise, clears the timeout, and processes the next queued task.
+  - `shutdown()` method for graceful shutdown: rejects queued tasks, terminates all workers, and clears resources.
 
 - **Worker implementation (`hellspawn.ts`):**
   - Listens for `TaskMessage`s from the main thread, logs the number of commands, and applies a single `SedCommand` (the main thread enforces one-command-per-task).
@@ -186,9 +189,13 @@ Healthcheck behavior and the optional file-based liveness probe are documented i
   - `Logger` reads global configuration from env (`LOG_LEVEL`, `NODE_ENV`, `LOG_TEMPLATE`) and formats messages as `[{level}: {module}]: {message}` by default.
   - All major components (`index.ts` main flow, worker pool, `hellspawn.ts`, initialization paths) use a `Logger` instance with a module name, which is crucial for debugging worker timeouts, DB cleanup, and sed parsing.
 
-- **Configuration constants (`config.ts`):**
-  - Central place for all tunable limits used across the codebase (cleanup intervals, history limits, worker pool size, timeout values, etc.).
-  - Tests such as `database.test.ts` assume these constants; when changing limits like `MAX_HISTORY_PER_CHAT`, adjust tests accordingly.
+- **Configuration (`config.ts`):**
+  - Typed configuration loader that reads and validates environment variables.
+  - Supports 17+ configuration options with sensible defaults and min/max bounds validation.
+  - Helper functions for parsing integers, booleans, strings, and log levels with validation.
+  - Frozen `CONFIG` object export prevents accidental mutations.
+  - Test mode support - skips TOKEN validation when `NODE_ENV=test`.
+  - Tests such as `database.test.ts` import `CONFIG` for assertions; when changing limits like `MAX_HISTORY_PER_CHAT`, adjust tests accordingly.
 
 ### Telegram integration & commands
 
@@ -216,9 +223,10 @@ Healthcheck behavior and the optional file-based liveness probe are documented i
 
 ## Testing Strategy
 
-- **Test runner:** uses Bun's built-in `bun:test` module; tests live in `*.test.ts` files at the repo root (`database.test.ts`, `utils.test.ts`, `workerpool.test.ts`).
+- **Test runner:** uses Bun's built-in `bun:test` module; tests live in `tests/*.test.ts` files (`database.test.ts`, `sed.test.ts`, `utils.test.ts`, `workerpool.test.ts`).
 - **Focus areas:**
   - `utils.test.ts`: ensures sed parsing (`SED_PATTERN`), flag normalization (`getRegexFlags`), and MarkdownV2/backslash escaping remain stable.
+  - `sed.test.ts`: tests `parseSedCommands` with various inputs including multi-line replacements, tricky inputs, and edge cases.
   - `workerpool.test.ts`: validates queue behavior, concurrency limits, and error handling of a worker-pool-like abstraction.
   - `database.test.ts`: tests the database access patterns (history storage, mapping behavior, cleanup, and per-chat history limits) with an in-memory SQLite instance.
 - When modifying sed parsing, history retention logic, or worker-pool behavior, update the corresponding tests and re-run:

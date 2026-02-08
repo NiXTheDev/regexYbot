@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.8
+FROM oven/bun:1.3.9
 
 ENV NODE_ENV=production
 
