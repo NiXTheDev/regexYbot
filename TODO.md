@@ -60,14 +60,14 @@ This is a larger change; consider doing it in a separate branch.
 
 ## 5. Regex behavior & ergonomics
 
-- [ ] Document in code (and optionally README) the exact rules for `parseSedCommands`:
+- [x] Document in code (and optionally README) the exact rules for `parseSedCommands`:
   - New command starts on lines whose `trim().startsWith("s/")`.
   - Multi-line replacements are supported by joining subsequent lines until the next command.
-- [ ] Add tests that directly exercise `parseSedCommands` with tricky inputs:
+- [x] Add tests that directly exercise `parseSedCommands` with tricky inputs:
   - Mixed plain text + sed command lines.
   - Multi-line replacements with indentation.
   - Edited commands that change line structure.
-- [ ] Review behavior against the original regexbot expectations where relevant (especially reply-less sed application to the last message) and add tests encoding the intended semantics.
+- [x] Review behavior against the original regexbot expectations where relevant (especially reply-less sed application to the last message) and add tests encoding the intended semantics.
 
 ## 6. Logging & observability improvements
 
