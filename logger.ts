@@ -1,29 +1,12 @@
 import { LOG_LEVELS, LogLevel } from "./types";
+import { CONFIG } from "./config";
 
-// Determine the global log level from environment variables
-const getGlobalLogLevel = (): LogLevel => {
-	const envLevel = process.env.LOG_LEVEL?.toLowerCase();
-	if (
-		envLevel === "none" ||
-		envLevel === "debug" ||
-		envLevel === "info" ||
-		envLevel === "warn" ||
-		envLevel === "error" ||
-		envLevel === "fatal"
-	) {
-		return envLevel;
-	}
-	// Default to 'info' in production, 'debug' otherwise
-	return process.env.NODE_ENV === "production" ? "info" : "debug";
-};
-
-const globalLogLevel = getGlobalLogLevel();
+const globalLogLevel = CONFIG.LOG_LEVEL;
 const globalLogLevelValue =
 	globalLogLevel === "none"
 		? Infinity
 		: LOG_LEVELS[globalLogLevel as Exclude<LogLevel, "none">];
-const logTemplate =
-	process.env.LOG_TEMPLATE || "[{level}: {module}]: {message}";
+const logTemplate = CONFIG.LOG_TEMPLATE;
 
 export class Logger {
 	private moduleName: string;

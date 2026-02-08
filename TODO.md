@@ -4,13 +4,13 @@ High-level plan for future improvements to regexYbot. This is intentionally non-
 
 ## 1. Centralized configuration & env knobs (`config.ts`)
 
-- [ ] Introduce a typed config loader in `config.ts` that:
+- [x] Introduce a typed config loader in `config.ts` that:
   - Reads relevant env vars (`TOKEN`-adjacent knobs, `WORKER_POOL_SIZE`, cleanup intervals, history limits, timeouts, retry limits, etc.).
   - Applies sane defaults matching the current hardcoded values.
   - Performs basic validation (e.g., non-negative integers, sensible upper bounds) and logs warnings for invalid values.
-- [ ] Ensure all other modules (`index.ts`, worker pool, DB service, healthcheck wiring) read values only from `CONFIG`, not directly from `process.env`.
-- [ ] Keep `README.md` and `.env.example` in sync with the set of supported env knobs.
-- [ ] Leave room (e.g., helper function or tiny abstraction) for optional hot-reload of specific values later (e.g., cleanup interval) without committing to it now.
+- [x] Ensure all other modules (`index.ts`, worker pool, DB service, healthcheck wiring) read values only from `CONFIG`, not directly from `process.env`.
+- [x] Keep `README.md` and `.env.example` in sync with the set of supported env knobs.
+- [x] Leave room (e.g., helper function or tiny abstraction) for optional hot-reload of specific values later (e.g., cleanup interval) without committing to it now.
 
 ## 2. Module decomposition (shrinking `index.ts`)
 

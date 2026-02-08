@@ -8,22 +8,24 @@ import { SQL } from "bun";
 import { writeFileSync } from "node:fs";
 import { Bot, Context, GrammyError } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
+import { CONFIG } from "./config";
 import { Logger } from "./logger";
 import { SED_PATTERN } from "./utils";
-import { CONFIG } from "./config";
 import { DatabaseService } from "./database";
 import { WorkerPool } from "./workerPool";
 import { parseSedCommands, SedHandler } from "./sed";
 
 // --- Configuration ---
-const token = process.env.TOKEN;
-if (!token) {
-	const initLogger = new Logger("INIT");
-	initLogger.fatal("TOKEN environment variable not set.");
-	process.exit(1);
-}
-const base = (process.env.BASE_URL || "https://api.telegram.org").trim();
-const { WORKER_POOL_SIZE, RETRY_MAX_RETRIES, RETRY_MAX_DELAY_MS } = CONFIG;
+const {
+	TOKEN,
+	BASE_URL,
+	WORKER_POOL_SIZE,
+	RETRY_MAX_RETRIES,
+	RETRY_MAX_DELAY_MS,
+	ENABLE_FILE_HEALTHCHECK,
+	LIVENESS_FILE,
+	LIVENESS_INTERVAL_MS,
+} = CONFIG;
 
 // --- Type Definitions ---
 type MyContext = Context & CommandsFlavor;
@@ -31,7 +33,7 @@ type MyContext = Context & CommandsFlavor;
 // --- Bot Initialization ---
 const logger = new Logger("Main");
 logger.info("Initializing bot...");
-const bot = new Bot<MyContext>(token, { client: { apiRoot: base } });
+const bot = new Bot<MyContext>(TOKEN, { client: { apiRoot: BASE_URL } });
 
 // --- Rate Limiting & Retry Configuration ---
 bot.api.config.use(
@@ -271,20 +273,15 @@ process.on("uncaughtException", (error: Error) => {
 });
 
 // --- File-based Healthcheck ---
-if (process.env.ENABLE_FILE_HEALTHCHECK === "true") {
-	const livenessFile = process.env.LIVENESS_FILE || "/tmp/bot-alive";
-	const livenessInterval = parseInt(
-		process.env.LIVENESS_INTERVAL_MS || "30000",
-		10,
-	);
-	logger.info(`File-based healthcheck enabled (file: ${livenessFile})`);
+if (ENABLE_FILE_HEALTHCHECK) {
+	logger.info(`File-based healthcheck enabled (file: ${LIVENESS_FILE})`);
 	setInterval(() => {
 		try {
-			writeFileSync(livenessFile, Date.now().toString());
+			writeFileSync(LIVENESS_FILE, Date.now().toString());
 		} catch (error) {
 			logger.error(`Failed to write liveness file: ${error}`);
 		}
-	}, livenessInterval);
+	}, LIVENESS_INTERVAL_MS);
 }
 
 // --- Final Setup ---
