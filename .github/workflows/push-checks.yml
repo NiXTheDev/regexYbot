@@ -2,7 +2,7 @@ name: Push Checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 jobs:
   lint:
@@ -15,7 +15,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
-          bun-version: 1.3.6
+          bun-version: 1.3.8
 
       - name: Install dependencies
         run: bun install -d
@@ -33,7 +33,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
-          bun-version: 1.3.6
+          bun-version: 1.3.8
 
       - name: Install dependencies
         run: bun install -d
@@ -51,7 +51,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
-          bun-version: 1.3.6
+          bun-version: 1.3.8
 
       - name: Install dependencies
         run: bun install -d
@@ -70,7 +70,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
-          bun-version: 1.3.6
+          bun-version: 1.3.8
 
       - name: Install dependencies
         run: bun install -d
@@ -97,49 +97,60 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "commit=${COMMIT_HASH}" >> $GITHUB_OUTPUT
+          BRANCH='${{ github.ref_name }}'
+          echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
 
       - name: Generate tags
         id: tags
         run: |
           VERSION='${{ steps.version.outputs.version }}'
           COMMIT='${{ steps.version.outputs.commit }}'
+          BRANCH='${{ steps.version.outputs.branch }}'
           USERNAME='${{ secrets.DOCKER_USERNAME }}'
           REPO='${{ github.repository }}'
           REPO=$(echo "$REPO" | tr '[:upper:]' '[:lower:]')
 
           echo "Version: $VERSION"
+          echo "Branch: $BRANCH"
+          echo "Commit: $COMMIT"
 
-          if [ "$VERSION" != "latest" ]; then
-            PRE_RELEASE=""
-            BASE_VERSION="$VERSION"
-            if [[ "$VERSION" == *"-"* ]]; then
-              PRE_RELEASE="${VERSION##*-}"
-              BASE_VERSION="${VERSION%-*}"
+          if [ "$BRANCH" = "main" ]; then
+            # Main branch: version-based tags + release tag
+            echo "Building for main branch (stable release)"
+            
+            if [ "$VERSION" != "latest" ]; then
+              DOCKER_TAGS="docker.io/${USERNAME}/regexybot:release,docker.io/${USERNAME}/regexybot:${COMMIT},docker.io/${USERNAME}/regexybot:${VERSION}"
+              GHCR_TAGS="ghcr.io/${REPO}:release,ghcr.io/${REPO}:${COMMIT},ghcr.io/${REPO}:${VERSION}"
+
+              CURRENT="$VERSION"
+              while true; do
+                PREV="$CURRENT"
+                CURRENT=$(echo "$CURRENT" | sed 's/\.[^.]*$//')
+                if [ "$CURRENT" = "$PREV" ] || [ -z "$CURRENT" ]; then
+                  break
+                fi
+                DOCKER_TAGS="${DOCKER_TAGS},docker.io/${USERNAME}/regexybot:${CURRENT}"
+                GHCR_TAGS="${GHCR_TAGS},ghcr.io/${REPO}:${CURRENT}"
+              done
+            else
+              DOCKER_TAGS="docker.io/${USERNAME}/regexybot:release,docker.io/${USERNAME}/regexybot:${COMMIT}"
+              GHCR_TAGS="ghcr.io/${REPO}:release,ghcr.io/${REPO}:${COMMIT}"
             fi
-            echo "Base version: $BASE_VERSION"
-            echo "Pre-release: $PRE_RELEASE"
-
-            DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:${COMMIT},docker.io/${USERNAME}/regexybot:${VERSION}"
-            GHCR_TAGS="ghcr.io/${REPO}:latest,ghcr.io/${REPO}:${COMMIT},ghcr.io/${REPO}:${VERSION}"
-
-            CURRENT="$BASE_VERSION"
-            while true; do
-              PREV="$CURRENT"
-              CURRENT=$(echo "$CURRENT" | sed 's/\.[^.]*$//')
-              if [ "$CURRENT" = "$PREV" ] || [ -z "$CURRENT" ]; then
-                break
-              fi
-              DOCKER_TAGS="${DOCKER_TAGS},docker.io/${USERNAME}/regexybot:${CURRENT}"
-              GHCR_TAGS="${GHCR_TAGS},ghcr.io/${REPO}:${CURRENT}"
-            done
-
-            if [ -n "$PRE_RELEASE" ]; then
-              DOCKER_TAGS="${DOCKER_TAGS},docker.io/${USERNAME}/regexybot:${PRE_RELEASE}"
-              GHCR_TAGS="${GHCR_TAGS},ghcr.io/${REPO}:${PRE_RELEASE}"
+          elif [ "$BRANCH" = "dev" ]; then
+            # Dev branch: dev-<version> + dev + next + latest tags
+            echo "Building for dev branch (development)"
+            
+            DOCKER_TAGS="docker.io/${USERNAME}/regexybot:dev,docker.io/${USERNAME}/regexybot:next,docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:dev-${COMMIT}"
+            GHCR_TAGS="ghcr.io/${REPO}:dev,ghcr.io/${REPO}:next,ghcr.io/${REPO}:latest,ghcr.io/${REPO}:dev-${COMMIT}"
+            
+            if [ "$VERSION" != "latest" ]; then
+              DOCKER_TAGS="${DOCKER_TAGS},docker.io/${USERNAME}/regexybot:dev-${VERSION}"
+              GHCR_TAGS="${GHCR_TAGS},ghcr.io/${REPO}:dev-${VERSION}"
             fi
           else
-            DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:${COMMIT}"
-            GHCR_TAGS="ghcr.io/${REPO}:latest,ghcr.io/${REPO}:${COMMIT}"
+            # Other branches: just commit hash
+            DOCKER_TAGS="docker.io/${USERNAME}/regexybot:${COMMIT}"
+            GHCR_TAGS="ghcr.io/${REPO}:${COMMIT}"
           fi
 
           echo "Docker Tags: $DOCKER_TAGS"
