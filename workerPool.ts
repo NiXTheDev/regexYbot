@@ -134,4 +134,35 @@ export class WorkerPool {
 			this.processQueue();
 		});
 	}
+
+	/**
+	 * Gracefully shuts down the worker pool.
+	 * Rejects all queued tasks, terminates all workers, and clears resources.
+	 * This method is idempotent - calling it multiple times is safe.
+	 */
+	public shutdown(): void {
+		logger.info("Shutting down worker pool...");
+
+		// Reject all queued tasks
+		while (this.taskQueue.length > 0) {
+			const { reject } = this.taskQueue.shift()!;
+			reject(new Error("Worker pool is shutting down"));
+		}
+
+		// Clear all timeouts and terminate workers
+		for (const [worker, timeout] of this.timeouts.entries()) {
+			clearTimeout(timeout);
+			this.timeouts.delete(worker);
+		}
+
+		// Terminate all workers
+		for (const worker of this.workers) {
+			worker.terminate();
+		}
+
+		// Clear pending tasks map
+		this.pendingTasks.clear();
+
+		logger.info("Worker pool shut down complete.");
+	}
 }

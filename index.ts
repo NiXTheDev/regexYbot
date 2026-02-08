@@ -272,6 +272,39 @@ process.on("uncaughtException", (error: Error) => {
 	logger.fatal(`Uncaught Exception: ${error.message}\n${error.stack}`);
 });
 
+// --- Graceful Shutdown ---
+let isShuttingDown = false;
+
+async function gracefulShutdown(signal: string): Promise<void> {
+	if (isShuttingDown) {
+		logger.info("Shutdown already in progress, ignoring signal...");
+		return;
+	}
+	isShuttingDown = true;
+
+	logger.info(`Received ${signal}, starting graceful shutdown...`);
+
+	try {
+		// Stop accepting new updates
+		logger.info("Stopping bot...");
+		await bot.stop();
+
+		// Shut down worker pool (drain queue and terminate workers)
+		logger.info("Shutting down worker pool...");
+		workerPool.shutdown();
+
+		logger.info("Graceful shutdown complete.");
+		process.exit(0);
+	} catch (error) {
+		logger.error(`Error during graceful shutdown: ${error}`);
+		process.exit(1);
+	}
+}
+
+// Register signal handlers
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+
 // --- File-based Healthcheck ---
 if (ENABLE_FILE_HEALTHCHECK) {
 	logger.info(`File-based healthcheck enabled (file: ${LIVENESS_FILE})`);

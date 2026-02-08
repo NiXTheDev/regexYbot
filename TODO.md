@@ -82,11 +82,11 @@ This is a larger change; consider doing it in a separate branch.
 
 ## 7. Graceful shutdown & lifecycle
 
-- [ ] Wire process signal handlers (`SIGINT`, `SIGTERM` where supported) to:
+- [x] Wire process signal handlers (`SIGINT`, `SIGTERM` where supported) to:
   - Call `bot.stop()`.
   - Stop accepting new tasks in the worker pool and drain/terminate workers.
   - Cleanly close any other resources if/when introduced.
-- [ ] Ensure shutdown handling is idempotent and doesn’t throw inside the signal handler.
+- [x] Ensure shutdown handling is idempotent and doesn't throw inside the signal handler.
 - [ ] Consider adding a small integration-style test or manual test plan for graceful shutdown (particularly in Docker).
 
 ## 8. Persistence strategy (confirm and document in-memory DB)
