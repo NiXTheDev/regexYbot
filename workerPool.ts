@@ -165,4 +165,78 @@ export class WorkerPool {
 
 		logger.info("Worker pool shut down complete.");
 	}
+
+	/**
+	 * Drains the task queue by processing all pending tasks before shutting down.
+	 * Creates additional workers temporarily to handle the backlog faster.
+	 * Returns a promise that resolves when all tasks are complete.
+	 */
+	public async drainAndShutdown(): Promise<void> {
+		const queueSize = this.taskQueue.length;
+		const pendingSize = this.pendingTasks.size;
+
+		if (queueSize === 0 && pendingSize === 0) {
+			logger.info("No pending tasks, shutting down immediately.");
+			this.shutdown();
+			return;
+		}
+
+		logger.info(
+			`Draining ${queueSize} queued tasks and ${pendingSize} pending tasks...`,
+		);
+
+		// Create additional workers to process the queue faster
+		// We'll create up to queueSize additional workers (or at least 1 more)
+		const additionalWorkers = Math.min(queueSize, 10); // Cap at 10 additional workers
+		const tempWorkers: Worker[] = [];
+
+		if (additionalWorkers > 0) {
+			logger.info(
+				`Scaling up by ${additionalWorkers} temporary workers to drain queue faster...`,
+			);
+			for (let i = 0; i < additionalWorkers; i++) {
+				const worker = this.createWorker(
+					this.workers.length + i + 1,
+					this.workers.length + additionalWorkers,
+				);
+				tempWorkers.push(worker);
+				this.workers.push(worker);
+			}
+			// Trigger queue processing with the new workers
+			this.processQueue();
+		}
+
+		// Wait for all tasks to complete
+		return new Promise((resolve) => {
+			const checkInterval = setInterval(() => {
+				const remaining = this.taskQueue.length + this.pendingTasks.size;
+				if (remaining === 0) {
+					clearInterval(checkInterval);
+					logger.info("All tasks completed, shutting down...");
+
+					// Remove temporary workers
+					for (const tempWorker of tempWorkers) {
+						const index = this.workers.indexOf(tempWorker);
+						if (index !== -1) {
+							this.workers.splice(index, 1);
+							tempWorker.terminate();
+						}
+					}
+
+					this.shutdown();
+					resolve();
+				} else {
+					logger.debug(`Waiting for ${remaining} tasks to complete...`);
+				}
+			}, 100);
+
+			// Safety timeout - force shutdown after 30 seconds
+			setTimeout(() => {
+				clearInterval(checkInterval);
+				logger.warn("Drain timeout reached, forcing shutdown...");
+				this.shutdown();
+				resolve();
+			}, 30000);
+		});
+	}
 }

@@ -285,13 +285,14 @@ async function gracefulShutdown(signal: string): Promise<void> {
 	logger.info(`Received ${signal}, starting graceful shutdown...`);
 
 	try {
-		// Stop accepting new updates
-		logger.info("Stopping bot...");
+		// Stop accepting new updates from Telegram
+		logger.info("Stopping bot from accepting new updates...");
 		await bot.stop();
 
-		// Shut down worker pool (drain queue and terminate workers)
-		logger.info("Shutting down worker pool...");
-		workerPool.shutdown();
+		// Drain the worker pool - finish processing all pending tasks
+		// This scales up workers temporarily to finish faster
+		logger.info("Draining worker pool (finishing pending tasks)...");
+		await workerPool.drainAndShutdown();
 
 		logger.info("Graceful shutdown complete.");
 		process.exit(0);
