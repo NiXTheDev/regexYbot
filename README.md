@@ -104,7 +104,8 @@ This project uses a two-branch workflow:
 - Contains production-ready code
 - Merges happen from `dev` via pull requests
 - Docker images are tagged with:
-  - `release` - always points to latest stable
+  - `release` - stable release marker
+  - `latest` - floats to most recent build (becomes stable after merge)
   - Version numbers from `package.json` (e.g., `0.1.7.1`, `0.1.7`, `0.1`)
   - Git commit hash
 
@@ -115,9 +116,8 @@ This project uses a two-branch workflow:
 - Docker images are tagged with:
   - `dev` - latest development build
   - `next` - upcoming release preview
-  - `latest` - also points to dev (for convenience)
-  - `dev-<version>` - version-specific dev build
-  - `dev-<commit>` - commit-specific dev build
+  - `latest` - floats to most recent build (overwritten by dev activity)
+  - `dev-<version>` - version-specific dev build (e.g., `dev-0.1.7.1`)
 
 ### Workflow
 

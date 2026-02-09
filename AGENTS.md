@@ -6,7 +6,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ### Environment & Dependencies
 
-- Runtime: [Bun](https://bun.sh/) (CI and Docker use Bun 1.3.8).
+- Runtime: [Bun](https://bun.sh/) (CI and Docker use Bun 1.3.9).
 - Install dependencies:
 
 ```bash
@@ -232,7 +232,7 @@ Healthcheck behavior and the optional file-based liveness probe are documented i
 - When modifying sed parsing, history retention logic, or worker-pool behavior, update the corresponding tests and re-run:
 
 ```bash
-bun test
+bun test ./tests/*.test.ts
 ```
 
 or target just the relevant file with:

@@ -115,12 +115,12 @@ jobs:
           echo "Commit: $COMMIT"
 
           if [ "$BRANCH" = "main" ]; then
-            # Main branch: version-based tags + release tag
+            # Main branch: version-based tags + release tag + latest
             echo "Building for main branch (stable release)"
             
             if [ "$VERSION" != "latest" ]; then
-              DOCKER_TAGS="docker.io/${USERNAME}/regexybot:release,docker.io/${USERNAME}/regexybot:${COMMIT},docker.io/${USERNAME}/regexybot:${VERSION}"
-              GHCR_TAGS="ghcr.io/${REPO}:release,ghcr.io/${REPO}:${COMMIT},ghcr.io/${REPO}:${VERSION}"
+              DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:release,docker.io/${USERNAME}/regexybot:${COMMIT},docker.io/${USERNAME}/regexybot:${VERSION}"
+              GHCR_TAGS="ghcr.io/${REPO}:latest,ghcr.io/${REPO}:release,ghcr.io/${REPO}:${COMMIT},ghcr.io/${REPO}:${VERSION}"
 
               CURRENT="$VERSION"
               while true; do
@@ -133,11 +133,12 @@ jobs:
                 GHCR_TAGS="${GHCR_TAGS},ghcr.io/${REPO}:${CURRENT}"
               done
             else
-              DOCKER_TAGS="docker.io/${USERNAME}/regexybot:release,docker.io/${USERNAME}/regexybot:${COMMIT}"
-              GHCR_TAGS="ghcr.io/${REPO}:release,ghcr.io/${REPO}:${COMMIT}"
+              DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:release,docker.io/${USERNAME}/regexybot:${COMMIT}"
+              GHCR_TAGS="ghcr.io/${REPO}:latest,ghcr.io/${REPO}:release,ghcr.io/${REPO}:${COMMIT}"
             fi
           elif [ "$BRANCH" = "dev" ]; then
             # Dev branch: dev-<version> + dev + next + latest tags
+            # latest tag floats between branches - whichever was pushed last wins
             echo "Building for dev branch (development)"
             
             DOCKER_TAGS="docker.io/${USERNAME}/regexybot:dev,docker.io/${USERNAME}/regexybot:next,docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:dev-${COMMIT}"
