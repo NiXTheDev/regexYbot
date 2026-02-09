@@ -9,7 +9,7 @@ import { writeFileSync } from "node:fs";
 import { Bot, Context, GrammyError } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { CONFIG } from "./config";
-import { Logger } from "./logger";
+import { Logger, withCorrelation } from "./logger";
 import { SED_PATTERN } from "./utils";
 import { DatabaseService } from "./database";
 import { WorkerPool } from "./workerPool";
@@ -237,27 +237,31 @@ bot.use(myCommands);
 
 // --- Bot Handlers ---
 bot.on("message", async (ctx) => {
-	logger.debug(
-		`Received message: ${ctx.message.text} (ID: ${ctx.message.message_id})`,
-	);
-	await handleTextMessage(
-		ctx,
-		ctx.message.text || ctx.message.caption,
-		ctx.message.message_id,
-		false,
-	);
+	await withCorrelation(async () => {
+		logger.debug(
+			`Received message: ${ctx.message.text} (ID: ${ctx.message.message_id})`,
+		);
+		await handleTextMessage(
+			ctx,
+			ctx.message.text || ctx.message.caption,
+			ctx.message.message_id,
+			false,
+		);
+	});
 });
 
 bot.on("edited_message", async (ctx) => {
-	logger.debug(
-		`Received edited message: ${ctx.editedMessage?.text} (ID: ${ctx.editedMessage?.message_id})`,
-	);
-	await handleTextMessage(
-		ctx,
-		ctx.editedMessage.text || ctx.editedMessage.caption,
-		ctx.editedMessage.message_id,
-		true,
-	);
+	await withCorrelation(async () => {
+		logger.debug(
+			`Received edited message: ${ctx.editedMessage?.text} (ID: ${ctx.editedMessage?.message_id})`,
+		);
+		await handleTextMessage(
+			ctx,
+			ctx.editedMessage.text || ctx.editedMessage.caption,
+			ctx.editedMessage.message_id,
+			true,
+		);
+	});
 });
 
 // --- Global Error Handlers ---

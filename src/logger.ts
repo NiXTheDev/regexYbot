@@ -1,5 +1,6 @@
 import { LOG_LEVELS, LogLevel } from "./types";
 import { CONFIG } from "./config";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 const globalLogLevel = CONFIG.LOG_LEVEL;
 const globalLogLevelValue =
@@ -7,6 +8,38 @@ const globalLogLevelValue =
 		? Infinity
 		: LOG_LEVELS[globalLogLevel as Exclude<LogLevel, "none">];
 const logTemplate = CONFIG.LOG_TEMPLATE;
+
+/**
+ * AsyncLocalStorage for correlation IDs
+ * Tracks the current operation context across async calls
+ */
+const correlationStorage = new AsyncLocalStorage<string>();
+
+/**
+ * Generate a short unique correlation ID
+ * Format: timestamp-random (e.g., "abc123-def456")
+ */
+function generateCorrelationId(): string {
+	const timestamp = Date.now().toString(36).slice(-6);
+	const random = Math.random().toString(36).slice(2, 8);
+	return `${timestamp}-${random}`;
+}
+
+/**
+ * Run a function within a correlation context
+ * All logs inside the function will include this correlation ID
+ */
+export function withCorrelation<T>(fn: () => T): T {
+	const cid = generateCorrelationId();
+	return correlationStorage.run(cid, fn);
+}
+
+/**
+ * Get the current correlation ID, if any
+ */
+export function getCorrelationId(): string | undefined {
+	return correlationStorage.getStore();
+}
 
 export class Logger {
 	private moduleName: string;
@@ -24,10 +57,14 @@ export class Logger {
 
 		if (LOG_LEVELS[level] < globalLogLevelValue) return;
 
+		const cid = getCorrelationId();
+
 		const formattedMessage = logTemplate
 			.replace("{level}", level.toUpperCase())
 			.replace("{module}", this.moduleName)
-			.replace("{message}", message);
+			.replace("{message}", message)
+			.replace(/{cid(:short)?}/g, cid || "-")
+			.replace(/{cid:full}/g, cid || "no-correlation-id");
 
 		// Use console.error for errors and fatals, console.log for everything else
 		const output =

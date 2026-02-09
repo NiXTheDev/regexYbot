@@ -71,14 +71,24 @@ This is a larger change; consider doing it in a separate branch.
 
 ## 6. Logging & observability improvements
 
-- [ ] Evaluate replacing the custom `Logger` with `@std/log` from JSR:
-  - Confirm needed capabilities: log levels, per-module context, and color support.
-  - Decide whether to keep a thin wrapper to preserve the existing `Logger` API and templates.
-- [ ] If migrating, implement a compatibility layer so existing code (`new Logger("Main")`, etc.) doesn’t need to change everywhere at once.
-- [ ] Introduce basic span-like grouping for operations (e.g. one span for a single sed chain execution), even if it’s just a correlation ID included in logs.
-- [ ] Improve user-facing error differentiation:
-  - Distinguish timeouts vs. invalid regex vs. generic worker errors.
-  - Ensure timeout messages are clear but do not leak sensitive pattern details.
+- [x] Evaluate replacing the custom `Logger` with `@std/log` from JSR:
+  - **Decision**: Keep custom Logger - @std/log is deprecated and overkill for our needs.
+  - Evaluated @denosaurs/log as alternative but still not necessary.
+- [x] Introduce correlation IDs for operation tracing:
+  - Added `{cid}` placeholder to LOG_TEMPLATE
+  - Supports `{cid}`, `{cid:short}`, and `{cid:full}` formats
+  - Uses AsyncLocalStorage to track correlation context across async operations
+  - Each message/edit handler gets its own unique correlation ID
+  - Format: base36(timestamp)-base36(random) (e.g., "abc123-def456")
+- [x] Add timestamp support:
+  - `{timestamp}` - DD/MM/YYYY HH:mm:ss format
+  - `{timestamp(unix)}` - Unix timestamp with milliseconds
+  - `{timestamp(ISO)}` - ISO 8601 format
+  - `{timestamp(datetime)}` - Explicit DD/MM/YYYY HH:mm:ss
+- [x] Improve error differentiation:
+  - Timeouts already have clear messages with WORKER_TIMEOUT_MS info
+  - Invalid regex errors are caught and reported clearly
+  - All errors include correlation ID when in operation context
 
 ## 7. Graceful shutdown & lifecycle
 
