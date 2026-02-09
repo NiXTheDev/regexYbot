@@ -4,5 +4,8 @@
 #
 # Security scanning is also performed by GitHub workflows.
 
-# [install.security]
-# scanner = "@bun-security-scanner/osv"
+[install.security]
+scanner = "@bun-security-scanner/osv"
+
+[test]
+root = './src/tests'

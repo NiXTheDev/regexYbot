@@ -8,31 +8,6 @@ const globalLogLevelValue =
 		: LOG_LEVELS[globalLogLevel as Exclude<LogLevel, "none">];
 const logTemplate = CONFIG.LOG_TEMPLATE;
 
-/**
- * Formats a timestamp according to the specified format
- * @param date - The date to format
- * @param format - The format type: 'unix', 'ISO', 'datetime', or default
- * @returns Formatted timestamp string
- */
-function formatTimestamp(date: Date, format?: string): string {
-	switch (format) {
-		case "unix":
-			return (date.getTime() / 1000).toFixed(3);
-		case "ISO":
-			return date.toISOString();
-		case "datetime":
-		default: {
-			const day = String(date.getDate()).padStart(2, "0");
-			const month = String(date.getMonth() + 1).padStart(2, "0");
-			const year = date.getFullYear();
-			const hours = String(date.getHours()).padStart(2, "0");
-			const minutes = String(date.getMinutes()).padStart(2, "0");
-			const seconds = String(date.getSeconds()).padStart(2, "0");
-			return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-		}
-	}
-}
-
 export class Logger {
 	private moduleName: string;
 	constructor(moduleName: string) {
@@ -49,13 +24,7 @@ export class Logger {
 
 		if (LOG_LEVELS[level] < globalLogLevelValue) return;
 
-		const now = new Date();
-
 		const formattedMessage = logTemplate
-			.replace(/{timestamp\((unix|ISO|datetime)\)}/g, (_, format) =>
-				formatTimestamp(now, format),
-			)
-			.replace(/{timestamp}/g, formatTimestamp(now))
 			.replace("{level}", level.toUpperCase())
 			.replace("{module}", this.moduleName)
 			.replace("{message}", message);
