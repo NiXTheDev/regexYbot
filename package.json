@@ -21,7 +21,7 @@
 		"dev": "bun run --watch src/index.ts",
 		"main": "bun src/index.ts",
 		"typecheck": "bun --bun tsc --noEmit",
-		"lint": "bunx eslint src",
+		"lint": "bunx eslint .",
 		"fmt": "bunx prettier --write .",
 		"fmt:check": "bunx prettier --check .",
 		"ltf": "bun fmt && bun lint && bun typecheck && bun test",
