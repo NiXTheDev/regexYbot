@@ -74,12 +74,32 @@ Check code style:
 
 ```bash
 bun run lint
+# or
+bun lint
 ```
 
 Format code:
 
 ```bash
-bun run format
+bun run fmt
+# or
+bun fmt
+
+# or, to only check the code formatting
+bun run fmt:check
+# or
+bun fmt:check
+```
+
+## Alternatively, run all checks at once:
+
+This script will: format, typecheck, lint and test the code, in that order
+This is only a convenience script that simplifies checking for problems, by running all four steps in one command
+
+```bash
+bun run ltf
+# or
+bun ltf
 ```
 
 ### Guidelines
@@ -100,6 +120,10 @@ Use descriptive branch names:
 - `feature/short-description` for new features
 - `docs/short-description` for documentation changes
 - `refactor/short-description` for code refactoring
+
+### Branch target
+
+Your PR must target `dev` branch, since this is the branch that receives updates the most, and is considered unstable, i.e. it doesn't have to work
 
 ### Commit Messages
 
@@ -148,7 +172,6 @@ docs(readme): update setup instructions
 ### Pull Request Checklist
 
 - [ ] Tests added or updated
-- [ ] CHANGELOG.md updated
 - [ ] Code follows project style
 - [ ] Self-reviewed code
 - [ ] Documentation updated (if needed)
