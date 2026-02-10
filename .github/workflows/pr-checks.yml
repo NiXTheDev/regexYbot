@@ -82,7 +82,7 @@ jobs:
         run: bun install -d
 
       - name: Run tests
-        run: bun test ./tests/*.test.ts
+        run: bun test
 
   build-docker:
     name: Build Docker Image (Validation)
