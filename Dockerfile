@@ -4,7 +4,7 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-COPY package.json bun.lock* ./
+COPY package.json./
 
 RUN bun install --production
 
