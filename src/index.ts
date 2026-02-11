@@ -14,6 +14,8 @@ import { SED_PATTERN } from "./utils";
 import { DatabaseService } from "./database";
 import { WorkerPool } from "./workerPool";
 import { parseSedCommands, SedHandler } from "./sed";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // --- Configuration ---
 const {
@@ -80,7 +82,9 @@ try {
 const dbService = new DatabaseService(db);
 
 // --- Worker Pool Setup ---
-const workerPool = new WorkerPool(WORKER_POOL_SIZE, "./hellspawn.ts");
+const __filename = fileURLToPath(import.meta.url);
+const workerScriptPath = join(__filename, "..", "hellspawn.ts");
+const workerPool = new WorkerPool(WORKER_POOL_SIZE, workerScriptPath);
 
 // --- Sed Handler Setup ---
 async function sendOrEditReply(

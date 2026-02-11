@@ -71,7 +71,12 @@ export class WorkerPool {
 	}
 
 	private handleWorkerError(worker: Worker, error: ErrorEvent) {
-		logger.error(error.error, "WORKER ERROR");
+		const errorMessage =
+			error.message ||
+			error.error?.message ||
+			String(error.error) ||
+			"Unknown worker error";
+		logger.error(`WORKER ERROR: ${errorMessage}`);
 		const timeout = this.timeouts.get(worker);
 		if (timeout) {
 			clearTimeout(timeout);
@@ -79,7 +84,7 @@ export class WorkerPool {
 		}
 		const pending = this.pendingTasks.get(worker);
 		if (pending) {
-			pending.reject(error.error);
+			pending.reject(new Error(errorMessage));
 			this.pendingTasks.delete(worker);
 		}
 		this.replaceWorker(worker);
