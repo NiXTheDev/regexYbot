@@ -278,6 +278,7 @@ process.on("uncaughtException", (error: Error) => {
 
 // --- Graceful Shutdown ---
 let isShuttingDown = false;
+let healthcheckInterval: NodeJS.Timeout | null = null;
 
 async function gracefulShutdown(signal: string): Promise<void> {
 	if (isShuttingDown) {
@@ -289,9 +290,21 @@ async function gracefulShutdown(signal: string): Promise<void> {
 	logger.info(`Received ${signal}, starting graceful shutdown...`);
 
 	try {
+		// Clear healthcheck interval if running
+		if (healthcheckInterval) {
+			logger.debug("Clearing healthcheck interval...");
+			clearInterval(healthcheckInterval);
+			healthcheckInterval = null;
+		}
+
 		// Stop accepting new updates from Telegram
 		logger.info("Stopping bot from accepting new updates...");
-		await bot.stop();
+		await Promise.race([
+			bot.stop(),
+			new Promise((_, reject) =>
+				setTimeout(() => reject(new Error("bot.stop() timeout")), 5000),
+			),
+		]);
 
 		// Shut down worker pool - rejects queued tasks and terminates workers
 		logger.info("Shutting down worker pool...");
@@ -312,7 +325,7 @@ process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 // --- File-based Healthcheck ---
 if (ENABLE_FILE_HEALTHCHECK) {
 	logger.info(`File-based healthcheck enabled (file: ${LIVENESS_FILE})`);
-	setInterval(() => {
+	healthcheckInterval = setInterval(() => {
 		try {
 			writeFileSync(LIVENESS_FILE, Date.now().toString());
 		} catch (error) {
