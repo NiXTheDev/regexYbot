@@ -51,7 +51,7 @@ describeOrSkip("Graceful Shutdown Integration", () => {
 		// Send shutdown signal
 		// On Windows, this may not trigger graceful shutdown handlers
 		// but the process should still exit
-		const signalResult = botProcess.kill("SIGTERM");
+		botProcess.kill("SIGTERM");
 
 		// Wait for exit with timeout
 		await new Promise((resolve) => {
