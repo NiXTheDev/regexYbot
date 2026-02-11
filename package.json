@@ -1,6 +1,6 @@
 {
 	"name": "@nixthedev/regexybot",
-	"version": "0.1.7.2",
+	"version": "0.1.8",
 	"type": "module",
 	"dependencies": {
 		"@grammyjs/auto-retry": "^2.0.2",
