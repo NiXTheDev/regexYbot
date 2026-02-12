@@ -36,6 +36,14 @@ export interface BotConfig {
 	readonly WORKER_POOL_SIZE: number;
 	readonly WORKER_TIMEOUT_MS: number;
 
+	// Worker Pool V2 (Dynamic Scaling)
+	readonly WORKER_POOL_V2_ENABLED: boolean;
+	readonly WORKER_POOL_MIN_WORKERS: number;
+	readonly WORKER_POOL_MAX_WORKERS: number;
+	readonly WORKER_POOL_INITIAL_WORKERS: number;
+	readonly WORKER_POOL_IDLE_TIMEOUT_MS: number;
+	readonly WORKER_POOL_IDLE_CHECK_INTERVAL_MS: number;
+
 	// Message Processing
 	readonly MAX_CHAIN_LENGTH: number;
 	readonly MAX_MESSAGE_LENGTH: number;
@@ -193,6 +201,27 @@ function loadConfig(): BotConfig {
 			60 * 1000,
 			1000,
 			300 * 1000,
+		),
+
+		// Worker Pool V2 (Dynamic Scaling)
+		WORKER_POOL_V2_ENABLED: parseBoolEnv("WORKER_POOL_V2_ENABLED", false),
+		WORKER_POOL_MIN_WORKERS: parseIntEnv("WORKER_POOL_MIN_WORKERS", 0, 0),
+		WORKER_POOL_MAX_WORKERS: parseIntEnv("WORKER_POOL_MAX_WORKERS", 8, 1, 32),
+		WORKER_POOL_INITIAL_WORKERS: parseIntEnv(
+			"WORKER_POOL_INITIAL_WORKERS",
+			1,
+			0,
+		),
+		WORKER_POOL_IDLE_TIMEOUT_MS: parseIntEnv(
+			"WORKER_POOL_IDLE_TIMEOUT_MS",
+			15 * 60 * 1000,
+			60 * 1000,
+		),
+		WORKER_POOL_IDLE_CHECK_INTERVAL_MS: parseIntEnv(
+			"WORKER_POOL_IDLE_CHECK_INTERVAL_MS",
+			5 * 60 * 1000,
+			10 * 1000,
+			15 * 60 * 1000,
 		),
 
 		// Message Processing

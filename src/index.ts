@@ -14,6 +14,8 @@ import { SED_PATTERN } from "./utils";
 import { DatabaseService } from "./database";
 import { WorkerPool } from "./workerPool";
 import { parseSedCommands, SedHandler } from "./sed";
+import { WorkerPoolV2 } from "./workerPoolV2";
+import type { IWorkerPool } from "./workerPoolInterface";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -22,6 +24,13 @@ const {
 	TOKEN,
 	BASE_URL,
 	WORKER_POOL_SIZE,
+	WORKER_TIMEOUT_MS,
+	WORKER_POOL_V2_ENABLED,
+	WORKER_POOL_MIN_WORKERS,
+	WORKER_POOL_MAX_WORKERS,
+	WORKER_POOL_INITIAL_WORKERS,
+	WORKER_POOL_IDLE_TIMEOUT_MS,
+	WORKER_POOL_IDLE_CHECK_INTERVAL_MS,
 	RETRY_MAX_RETRIES,
 	RETRY_MAX_DELAY_MS,
 	ENABLE_FILE_HEALTHCHECK,
@@ -84,7 +93,23 @@ const dbService = new DatabaseService(db);
 // --- Worker Pool Setup ---
 const __filename = fileURLToPath(import.meta.url);
 const workerScriptPath = join(__filename, "..", "hellspawn.ts");
-const workerPool = new WorkerPool(WORKER_POOL_SIZE, workerScriptPath);
+
+// Use WorkerPoolV2 if enabled, otherwise use legacy WorkerPool
+const workerPool: IWorkerPool = WORKER_POOL_V2_ENABLED
+	? new WorkerPoolV2({
+			maxWorkers: WORKER_POOL_MAX_WORKERS,
+			minWorkers: WORKER_POOL_MIN_WORKERS,
+			initialWorkers: WORKER_POOL_INITIAL_WORKERS,
+			taskTimeoutMs: WORKER_TIMEOUT_MS,
+			idleTimeoutMs: WORKER_POOL_IDLE_TIMEOUT_MS,
+			idleCheckIntervalMs: WORKER_POOL_IDLE_CHECK_INTERVAL_MS,
+			workerScript: workerScriptPath,
+		})
+	: new WorkerPool(WORKER_POOL_SIZE, workerScriptPath);
+
+if (WORKER_POOL_V2_ENABLED) {
+	logger.info("Using WorkerPoolV2 with dynamic scaling");
+}
 
 // --- Sed Handler Setup ---
 async function sendOrEditReply(
