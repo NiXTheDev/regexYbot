@@ -8,6 +8,13 @@ services:
       # Optional: Custom Telegram API server (default: https://api.telegram.org)
       # - BASE_URL=https://my-telegram-api.local/bot
       #
+      # Graceful Drain on Shutdown (optional):
+      # When enabled, the bot will process pending tasks before shutting down
+      # instead of immediately rejecting them. Useful for deployments.
+      # Note: Must complete within Docker's stop_grace_period (default: 10s)
+      # - GRACEFUL_DRAIN=true
+      # - GRACEFUL_DRAIN_TIMEOUT_MS=8000  # Max 9500ms to fit in 10s grace period
+      #
       # File-based healthcheck (uncomment to enable Option 4):
       # - ENABLE_FILE_HEALTHCHECK=true
       # - LIVENESS_FILE=/tmp/bot-alive
