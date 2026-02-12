@@ -44,6 +44,10 @@ export interface BotConfig {
 	readonly WORKER_POOL_IDLE_TIMEOUT_MS: number;
 	readonly WORKER_POOL_IDLE_CHECK_INTERVAL_MS: number;
 
+	// Graceful Shutdown
+	readonly GRACEFUL_DRAIN: boolean;
+	readonly GRACEFUL_DRAIN_TIMEOUT_MS: number;
+
 	// Message Processing
 	readonly MAX_CHAIN_LENGTH: number;
 	readonly MAX_MESSAGE_LENGTH: number;
@@ -222,6 +226,15 @@ function loadConfig(): BotConfig {
 			5 * 60 * 1000,
 			10 * 1000,
 			15 * 60 * 1000,
+		),
+
+		// Graceful Shutdown
+		GRACEFUL_DRAIN: parseBoolEnv("GRACEFUL_DRAIN", false),
+		GRACEFUL_DRAIN_TIMEOUT_MS: parseIntEnv(
+			"GRACEFUL_DRAIN_TIMEOUT_MS",
+			8000,
+			1000,
+			9500, // Max 9.5s to fit in Docker's 10s grace period
 		),
 
 		// Message Processing

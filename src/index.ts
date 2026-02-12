@@ -335,9 +335,20 @@ async function gracefulShutdown(signal: string): Promise<void> {
 			),
 		]);
 
-		// Shut down worker pool - rejects queued tasks and terminates workers
+		// Shut down worker pool
 		logger.info("Shutting down worker pool...");
-		workerPool.shutdown();
+		if (CONFIG.GRACEFUL_DRAIN) {
+			logger.info(
+				`Graceful drain enabled (timeout: ${CONFIG.GRACEFUL_DRAIN_TIMEOUT_MS}ms)`,
+			);
+			await workerPool.shutdown({
+				drainTasks: true,
+				drainTimeoutMs: CONFIG.GRACEFUL_DRAIN_TIMEOUT_MS,
+			});
+		} else {
+			logger.info("Immediate shutdown (graceful drain disabled)");
+			workerPool.shutdown();
+		}
 
 		logger.info("Graceful shutdown complete.");
 		process.exit(0);
