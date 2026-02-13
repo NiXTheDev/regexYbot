@@ -110,9 +110,9 @@ jobs:
           echo "Version: $VERSION"
           echo "Branch: $BRANCH"
 
-          if [ "$BRANCH" = "main" ]; then
-            # Main branch: version-based tags + release tag + latest
-            echo "Building for main branch (stable release)"
+          if [ "$BRANCH" = "release" ]; then
+            # release branch: version-based tags + release tag + latest
+            echo "Building for release branch (stable release)"
             
             if [ "$VERSION" != "latest" ]; then
               DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:release,docker.io/${USERNAME}/regexybot:${VERSION}"
