@@ -1,6 +1,7 @@
 import { Logger } from "./logger";
 import type { TaskMessage, ResultMessage } from "./types";
 import type { IWorkerPool } from "./workerPoolInterface";
+import { HealthMonitor, type HealthMetrics } from "./healthMonitor";
 
 const logger = new Logger("WorkerPoolV2");
 
@@ -59,17 +60,28 @@ export class WorkerPoolV2 implements IWorkerPool {
 			resolve: (value: ResultMessage) => void;
 			reject: (reason?: unknown) => void;
 			timeout: NodeJS.Timeout;
+			startTime: number;
 		}
 	>();
 	private timeouts = new Map<Worker, NodeJS.Timeout>();
 	private idleCheckInterval: NodeJS.Timeout | null = null;
 	private isShuttingDown = false;
+	private healthMonitor: HealthMonitor;
 
 	constructor(config: WorkerPoolV2Config) {
 		this.config = config;
 		logger.info(
 			`Initializing WorkerPoolV2 (min: ${config.minWorkers}, max: ${config.maxWorkers}, initial: ${config.initialWorkers})`,
 		);
+
+		// Initialize health monitor
+		this.healthMonitor = new HealthMonitor({
+			enabled: true,
+			intervalMs: 60000,
+			workerThreshold: config.minWorkers,
+			queueThreshold: 100,
+			errorRateThreshold: 0.1,
+		});
 
 		// Spawn initial workers
 		for (let i = 0; i < config.initialWorkers; i++) {
@@ -225,7 +237,12 @@ export class WorkerPoolV2 implements IWorkerPool {
 		}, this.config.taskTimeoutMs);
 
 		// Track pending task
-		this.pendingTasks.set(worker, { resolve, reject, timeout });
+		this.pendingTasks.set(worker, {
+			resolve,
+			reject,
+			timeout,
+			startTime: Date.now(),
+		});
 
 		// Update worker state
 		state.isIdle = false;
@@ -249,15 +266,19 @@ export class WorkerPoolV2 implements IWorkerPool {
 			clearTimeout(pending.timeout);
 			this.pendingTasks.delete(worker);
 
+			// Calculate task duration and record in health monitor
+			const duration = Date.now() - pending.startTime;
+			if (result.error) {
+				this.healthMonitor.recordError();
+				pending.reject(new Error(result.error));
+			} else {
+				this.healthMonitor.recordSuccess(duration);
+				pending.resolve(result);
+			}
+
 			if (state) {
 				state.isIdle = true;
 				state.lastActiveTime = Date.now();
-			}
-
-			if (result.error) {
-				pending.reject(new Error(result.error));
-			} else {
-				pending.resolve(result);
 			}
 		} else {
 			logger.warn("Received message from worker with no pending task");
@@ -281,6 +302,9 @@ export class WorkerPoolV2 implements IWorkerPool {
 			this.pendingTasks.delete(worker);
 			pending.reject(new Error(errorMessage));
 		}
+
+		// Record error in health monitor
+		this.healthMonitor.recordError();
 
 		// Remove failed worker and replace if needed
 		this.workers.delete(worker);
@@ -310,6 +334,9 @@ export class WorkerPoolV2 implements IWorkerPool {
 				),
 			);
 		}
+
+		// Record timeout as error in health monitor
+		this.healthMonitor.recordError();
 
 		// Terminate and replace the worker
 		const state = this.workers.get(worker);
@@ -424,6 +451,7 @@ export class WorkerPoolV2 implements IWorkerPool {
 		busyWorkers: number;
 		queuedTasks: number;
 		pendingTasks: number;
+		health: HealthMetrics;
 	} {
 		let idleWorkers = 0;
 		let busyWorkers = 0;
@@ -436,12 +464,20 @@ export class WorkerPoolV2 implements IWorkerPool {
 			}
 		}
 
+		const health = this.healthMonitor.calculateHealth(
+			this.workers.size,
+			idleWorkers,
+			this.taskQueue.length,
+			this.pendingTasks.size,
+		);
+
 		return {
 			totalWorkers: this.workers.size,
 			idleWorkers,
 			busyWorkers,
 			queuedTasks: this.taskQueue.length,
 			pendingTasks: this.pendingTasks.size,
+			health,
 		};
 	}
 
@@ -523,6 +559,9 @@ export class WorkerPoolV2 implements IWorkerPool {
 			clearInterval(this.idleCheckInterval);
 			this.idleCheckInterval = null;
 		}
+
+		// Stop health monitor
+		this.healthMonitor.stop();
 
 		if (drainTasks) {
 			// Attempt to drain tasks - spawn workers up to queue size to process quickly
