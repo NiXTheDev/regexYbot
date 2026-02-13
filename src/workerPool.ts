@@ -1,11 +1,12 @@
 import { Logger } from "./logger";
 import type { ResultMessage, TaskMessage } from "./types";
 import { CONFIG } from "./config";
+import type { IWorkerPool } from "./workerPoolInterface";
 
 const logger = new Logger("WorkerPool");
 const { WORKER_TIMEOUT_MS } = CONFIG;
 
-export class WorkerPool {
+export class WorkerPool implements IWorkerPool {
 	private workers: Worker[];
 	private taskQueue: Array<{
 		task: TaskMessage;
@@ -71,7 +72,12 @@ export class WorkerPool {
 	}
 
 	private handleWorkerError(worker: Worker, error: ErrorEvent) {
-		logger.error(error.error, "WORKER ERROR");
+		const errorMessage =
+			error.message ||
+			error.error?.message ||
+			String(error.error) ||
+			"Unknown worker error";
+		logger.error(`WORKER ERROR: ${errorMessage}`);
 		const timeout = this.timeouts.get(worker);
 		if (timeout) {
 			clearTimeout(timeout);
@@ -79,7 +85,7 @@ export class WorkerPool {
 		}
 		const pending = this.pendingTasks.get(worker);
 		if (pending) {
-			pending.reject(error.error);
+			pending.reject(new Error(errorMessage));
 			this.pendingTasks.delete(worker);
 		}
 		this.replaceWorker(worker);
@@ -164,5 +170,53 @@ export class WorkerPool {
 		this.pendingTasks.clear();
 
 		logger.info("Worker pool shut down complete.");
+	}
+
+	/**
+	 * Get current pool statistics (v1 compatibility)
+	 */
+	public getStats(): {
+		totalWorkers: number;
+		idleWorkers: number;
+		busyWorkers: number;
+		queuedTasks: number;
+		pendingTasks: number;
+	} {
+		return {
+			totalWorkers: this.workers.length,
+			idleWorkers: this.workers.length - this.pendingTasks.size,
+			busyWorkers: this.pendingTasks.size,
+			queuedTasks: this.taskQueue.length,
+			pendingTasks: this.pendingTasks.size,
+		};
+	}
+
+	/**
+	 * Get detailed information about each worker (v1 compatibility)
+	 * Legacy WorkerPool doesn't track per-worker queues
+	 */
+	public getWorkerDetails(): Array<{
+		workerId: number;
+		queueLength: number;
+		isIdle: boolean;
+		lastActiveTime: number;
+		idleDurationMs: number;
+	}> {
+		const now = Date.now();
+		return this.workers.map((_, index) => ({
+			workerId: index + 1,
+			queueLength: this.pendingTasks.has(this.workers[index]) ? 1 : 0,
+			isIdle: !this.pendingTasks.has(this.workers[index]),
+			lastActiveTime: now,
+			idleDurationMs: 0,
+		}));
+	}
+
+	/**
+	 * Get the current load factor (v1 compatibility)
+	 */
+	public getLoadFactor(): number {
+		if (this.workers.length === 0) return 0;
+		return this.pendingTasks.size / this.workers.length;
 	}
 }

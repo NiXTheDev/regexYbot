@@ -28,25 +28,27 @@ A fast, efficient, and feature-rich Telegram bot built with [grammY](https://git
 
 Configure the bot's behavior with the following environment variables:
 
-| Variable                  | Required | Description                                                                                              | Default Value                                |
-| :------------------------ | :------: | :------------------------------------------------------------------------------------------------------- | :------------------------------------------- |
-| `TOKEN`                   | **Yes**  | Your Telegram bot token.                                                                                 | —                                            |
-| `BASE_URL`                |    No    | Base URL for the Telegram Bot API, useful for local testing.                                             | `https://api.telegram.org`                   |
-| `LOG_LEVEL`               |    No    | Sets the minimum log level. <br>**Available levels:** `none`, `debug`, `info`, `warn`, `error`, `fatal`. | `debug` (development)<br>`info` (production) |
-| `LOG_TEMPLATE`            |    No    | Customizes the log output format.                                                                        | `[{level}: {module}]: {message}`             |
-| `NODE_ENV`                |    No    | Set to `production` to default the log level to `info`.                                                  | —                                            |
-| `WORKER_POOL_SIZE`        |    No    | Sets the number of worker threads for regex processing.                                                  | 4                                            |
-| `WORKER_TIMEOUT_MS`       |    No    | Maximum time a regex operation can run before being terminated (milliseconds).                           | 60000                                        |
-| `MAX_CHAIN_LENGTH`        |    No    | Maximum number of sed commands that can be chained together.                                             | 5                                            |
-| `MAX_MESSAGE_LENGTH`      |    No    | Maximum length of the bot's response message.                                                            | 4096                                         |
-| `CLEANUP_INTERVAL_MS`     |    No    | How often to clean up old message history (milliseconds).                                                | 172800000 (48 hours)                         |
-| `MAX_HISTORY_PER_CHAT`    |    No    | Maximum number of messages to keep in history per chat.                                                  | 20                                           |
-| `HISTORY_QUERY_LIMIT`     |    No    | Maximum number of messages to search when finding a target.                                              | 10                                           |
-| `RETRY_MAX_RETRIES`       |    No    | Maximum number of retries for Telegram API calls.                                                        | 3                                            |
-| `RETRY_MAX_DELAY_MS`      |    No    | Maximum delay between retries for Telegram API calls (milliseconds).                                     | 30000                                        |
-| `ENABLE_FILE_HEALTHCHECK` |    No    | Enable file-based healthcheck for Docker environments.                                                   | `false`                                      |
-| `LIVENESS_FILE`           |    No    | Path to the liveness file when healthcheck is enabled.                                                   | `/tmp/bot-alive`                             |
-| `LIVENESS_INTERVAL_MS`    |    No    | How often to update the liveness file (milliseconds).                                                    | 30000                                        |
+| Variable                    | Required | Description                                                                                               | Default Value                                |
+| :-------------------------- | :------: | :-------------------------------------------------------------------------------------------------------- | :------------------------------------------- |
+| `TOKEN`                     | **Yes**  | Your Telegram bot token.                                                                                  | —                                            |
+| `BASE_URL`                  |    No    | Base URL for the Telegram Bot API, useful for local testing.                                              | `https://api.telegram.org`                   |
+| `LOG_LEVEL`                 |    No    | Sets the minimum log level. <br>**Available levels:** `none`, `debug`, `info`, `warn`, `error`, `fatal`.  | `debug` (development)<br>`info` (production) |
+| `LOG_TEMPLATE`              |    No    | Customizes the log output format.                                                                         | `[{level}: {module}]: {message}`             |
+| `NODE_ENV`                  |    No    | Set to `production` to default the log level to `info`.                                                   | —                                            |
+| `WORKER_POOL_SIZE`          |    No    | Sets the number of worker threads for regex processing.                                                   | 4                                            |
+| `WORKER_TIMEOUT_MS`         |    No    | Maximum time a regex operation can run before being terminated (milliseconds).                            | 60000                                        |
+| `GRACEFUL_DRAIN`            |    No    | Enable graceful drain on shutdown. Processes pending tasks instead of rejecting them.                     | `false`                                      |
+| `GRACEFUL_DRAIN_TIMEOUT_MS` |    No    | Maximum time to spend draining queue during shutdown (milliseconds). Max 9500ms for Docker compatibility. | 8000                                         |
+| `MAX_CHAIN_LENGTH`          |    No    | Maximum number of sed commands that can be chained together.                                              | 5                                            |
+| `MAX_MESSAGE_LENGTH`        |    No    | Maximum length of the bot's response message.                                                             | 4096                                         |
+| `CLEANUP_INTERVAL_MS`       |    No    | How often to clean up old message history (milliseconds).                                                 | 172800000 (48 hours)                         |
+| `MAX_HISTORY_PER_CHAT`      |    No    | Maximum number of messages to keep in history per chat.                                                   | 20                                           |
+| `HISTORY_QUERY_LIMIT`       |    No    | Maximum number of messages to search when finding a target.                                               | 10                                           |
+| `RETRY_MAX_RETRIES`         |    No    | Maximum number of retries for Telegram API calls.                                                         | 3                                            |
+| `RETRY_MAX_DELAY_MS`        |    No    | Maximum delay between retries for Telegram API calls (milliseconds).                                      | 30000                                        |
+| `ENABLE_FILE_HEALTHCHECK`   |    No    | Enable file-based healthcheck for Docker environments.                                                    | `false`                                      |
+| `LIVENESS_FILE`             |    No    | Path to the liveness file when healthcheck is enabled.                                                    | `/tmp/bot-alive`                             |
+| `LIVENESS_INTERVAL_MS`      |    No    | How often to update the liveness file (milliseconds).                                                     | 30000                                        |
 
 ## Setup & Run
 
@@ -104,7 +106,8 @@ This project uses a two-branch workflow:
 - Contains production-ready code
 - Merges happen from `dev` via pull requests
 - Docker images are tagged with:
-  - `release` - always points to latest stable
+  - `release` - stable release marker
+  - `latest` - floats to most recent build (becomes stable after merge)
   - Version numbers from `package.json` (e.g., `0.1.7.1`, `0.1.7`, `0.1`)
   - Git commit hash
 
@@ -115,9 +118,8 @@ This project uses a two-branch workflow:
 - Docker images are tagged with:
   - `dev` - latest development build
   - `next` - upcoming release preview
-  - `latest` - also points to dev (for convenience)
-  - `dev-<version>` - version-specific dev build
-  - `dev-<commit>` - commit-specific dev build
+  - `latest` - floats to most recent build (overwritten by dev activity)
+  - `dev-<version>` - version-specific dev build (e.g., `dev-0.1.7.1`)
 
 ### Workflow
 
@@ -125,6 +127,63 @@ This project uses a two-branch workflow:
 2. Open PRs targeting `dev`
 3. When ready for release, open PR from `dev` to `main`
 4. After merging to `main`, Docker images are built with release tags
+
+## Docker Deployment
+
+### Graceful Shutdown
+
+The bot supports graceful shutdown for Docker deployments:
+
+**Default Behavior (Immediate Shutdown):**
+
+- On SIGTERM/SIGINT, immediately stops accepting updates
+- Queued tasks are rejected
+- Fast shutdown suitable for most use cases
+
+**Graceful Drain Mode (Optional):**
+Enable with `GRACEFUL_DRAIN=true` to process pending tasks before shutting down:
+
+```yaml
+environment:
+  - GRACEFUL_DRAIN=true
+  - GRACEFUL_DRAIN_TIMEOUT_MS=8000
+```
+
+**Important considerations:**
+
+- Graceful drain must complete within Docker's stop grace period (default: 10s)
+- Default drain timeout is 8000ms (8s) to fit within Docker's grace period
+- Maximum recommended: 9500ms (9.5s) to avoid SIGKILL
+- If queue is too large to drain in time, remaining tasks are lost
+- Useful for deployments where you don't want to lose pending operations
+
+**Adjusting Docker Grace Period:**
+If you need more time for graceful drain, increase the container's grace period:
+
+```yaml
+services:
+  regexybot:
+    stop_grace_period: 20s # Increase from default 10s
+    environment:
+      - GRACEFUL_DRAIN=true
+      - GRACEFUL_DRAIN_TIMEOUT_MS=18000 # 18s (under 20s grace period)
+```
+
+### Testing Graceful Shutdown
+
+A test script is provided to verify graceful shutdown behavior:
+
+```bash
+cd docker
+./test-graceful-shutdown.sh
+```
+
+This tests:
+
+- Immediate shutdown behavior
+- Graceful drain with pending tasks
+- Docker Compose stop/restart scenarios
+- SIGINT vs SIGTERM handling
 
 ## License
 

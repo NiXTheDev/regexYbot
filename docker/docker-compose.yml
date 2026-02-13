@@ -1,12 +1,19 @@
 services:
   regexybot:
-    image: ghcr.io/nixthedev/regexybot:latest
+    image: ghcr.io/nixthedev/regexybot:release # release for stable builds, dev for live updates as they are pushed, dev may be broken and not work
     container_name: regexybot
     restart: unless-stopped
     environment:
       - TOKEN=${TOKEN:-your_bot_token_here}
       # Optional: Custom Telegram API server (default: https://api.telegram.org)
       # - BASE_URL=https://my-telegram-api.local/bot
+      #
+      # Graceful Drain on Shutdown (optional):
+      # When enabled, the bot will process pending tasks before shutting down
+      # instead of immediately rejecting them. Useful for deployments.
+      # Note: Must complete within Docker's stop_grace_period (default: 10s)
+      # - GRACEFUL_DRAIN=true
+      # - GRACEFUL_DRAIN_TIMEOUT_MS=8000  # Max 9500ms to fit in 10s grace period
       #
       # File-based healthcheck (uncomment to enable Option 4):
       # - ENABLE_FILE_HEALTHCHECK=true
@@ -62,9 +69,6 @@ services:
       # start_period: 20s
       #
       # ========================================================================
-    volumes:
-      # Optional: Mount custom config (uncomment and create config file if needed)
-      # - ./config.env:/app/.env:ro
     logging:
       driver: json-file
       options:

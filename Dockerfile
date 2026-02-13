@@ -4,7 +4,7 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-COPY package.json bun.lock* ./
+COPY package.json ./
 
 RUN bun install --production
 
@@ -14,4 +14,4 @@ RUN chown -R bun:bun /app
 
 USER bun
 
-CMD ["bun", "run", "index.ts"]
+CMD ["bun", "run", "--silent", "main"]

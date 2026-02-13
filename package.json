@@ -1,33 +1,30 @@
 {
 	"name": "@nixthedev/regexybot",
-	"version": "0.1.7.1",
+	"version": "0.1.8",
 	"type": "module",
 	"dependencies": {
 		"@grammyjs/auto-retry": "^2.0.2",
 		"@grammyjs/commands": "^1.2.0",
 		"@grammyjs/hydrate": "^1.6.0",
 		"@grammyjs/runner": "^2.0.3",
-		"grammy": "1.39.3"
+		"grammy": "1.40.0"
 	},
 	"devDependencies": {
 		"@bun-security-scanner/osv": "^1.0.0",
-		"@eslint/eslintrc": "^3.3.3",
 		"@types/bun": "1.3.8",
-		"@typescript-eslint/eslint-plugin": "^8.52.0",
-		"@typescript-eslint/parser": "^8.52.0",
 		"eslint": "^9.39.2",
 		"prettier": "^3.7.4",
 		"typescript": "^5.9.3",
 		"typescript-eslint": "^8.52.0"
 	},
 	"scripts": {
-		"dev": "bun run --watch index.ts",
-		"main": "bun run index.ts",
+		"dev": "bun run --watch src/index.ts",
+		"main": "bun src/index.ts",
 		"typecheck": "bun --bun tsc --noEmit",
 		"lint": "bunx eslint .",
 		"fmt": "bunx prettier --write .",
 		"fmt:check": "bunx prettier --check .",
-		"ltf": "bun lint && bun typecheck && bun fmt && bun test ./tests/*.test.ts",
+		"ltf": "bun fmt && bun lint && bun typecheck && bun test",
 		"ltf:check": "bun run lint && bun run typecheck && bun run fmt:check"
 	}
 }

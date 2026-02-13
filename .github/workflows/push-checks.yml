@@ -15,7 +15,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
-          bun-version: 1.3.8
+          bun-version: 1.3.9
 
       - name: Install dependencies
         run: bun install -d
@@ -33,7 +33,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
-          bun-version: 1.3.8
+          bun-version: 1.3.9
 
       - name: Install dependencies
         run: bun install -d
@@ -51,7 +51,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
-          bun-version: 1.3.8
+          bun-version: 1.3.9
 
       - name: Install dependencies
         run: bun install -d
@@ -70,13 +70,13 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
-          bun-version: 1.3.8
+          bun-version: 1.3.9
 
       - name: Install dependencies
         run: bun install -d
 
       - name: Run tests
-        run: bun test ./tests/*.test.ts
+        run: bun test
 
   build-and-push:
     name: Build and Push Docker Image
@@ -95,8 +95,6 @@ jobs:
         run: |
           VERSION=$(grep '"version"' package.json 2>/dev/null | head -1 | cut -d '"' -f 4 || echo "latest")
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          COMMIT_HASH=$(git rev-parse --short HEAD)
-          echo "commit=${COMMIT_HASH}" >> $GITHUB_OUTPUT
           BRANCH='${{ github.ref_name }}'
           echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
 
@@ -104,7 +102,6 @@ jobs:
         id: tags
         run: |
           VERSION='${{ steps.version.outputs.version }}'
-          COMMIT='${{ steps.version.outputs.commit }}'
           BRANCH='${{ steps.version.outputs.branch }}'
           USERNAME='${{ secrets.DOCKER_USERNAME }}'
           REPO='${{ github.repository }}'
@@ -112,15 +109,14 @@ jobs:
 
           echo "Version: $VERSION"
           echo "Branch: $BRANCH"
-          echo "Commit: $COMMIT"
 
           if [ "$BRANCH" = "main" ]; then
-            # Main branch: version-based tags + release tag
+            # Main branch: version-based tags + release tag + latest
             echo "Building for main branch (stable release)"
             
             if [ "$VERSION" != "latest" ]; then
-              DOCKER_TAGS="docker.io/${USERNAME}/regexybot:release,docker.io/${USERNAME}/regexybot:${COMMIT},docker.io/${USERNAME}/regexybot:${VERSION}"
-              GHCR_TAGS="ghcr.io/${REPO}:release,ghcr.io/${REPO}:${COMMIT},ghcr.io/${REPO}:${VERSION}"
+              DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:release,docker.io/${USERNAME}/regexybot:${VERSION}"
+              GHCR_TAGS="ghcr.io/${REPO}:latest,ghcr.io/${REPO}:release,ghcr.io/${REPO}:${VERSION}"
 
               CURRENT="$VERSION"
               while true; do
@@ -133,24 +129,28 @@ jobs:
                 GHCR_TAGS="${GHCR_TAGS},ghcr.io/${REPO}:${CURRENT}"
               done
             else
-              DOCKER_TAGS="docker.io/${USERNAME}/regexybot:release,docker.io/${USERNAME}/regexybot:${COMMIT}"
-              GHCR_TAGS="ghcr.io/${REPO}:release,ghcr.io/${REPO}:${COMMIT}"
+              DOCKER_TAGS="docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:release"
+              GHCR_TAGS="ghcr.io/${REPO}:latest,ghcr.io/${REPO}:release"
             fi
           elif [ "$BRANCH" = "dev" ]; then
             # Dev branch: dev-<version> + dev + next + latest tags
+            # latest tag floats between branches - whichever was pushed last wins
             echo "Building for dev branch (development)"
             
-            DOCKER_TAGS="docker.io/${USERNAME}/regexybot:dev,docker.io/${USERNAME}/regexybot:next,docker.io/${USERNAME}/regexybot:latest,docker.io/${USERNAME}/regexybot:dev-${COMMIT}"
-            GHCR_TAGS="ghcr.io/${REPO}:dev,ghcr.io/${REPO}:next,ghcr.io/${REPO}:latest,ghcr.io/${REPO}:dev-${COMMIT}"
+            DOCKER_TAGS="docker.io/${USERNAME}/regexybot:dev,docker.io/${USERNAME}/regexybot:next,docker.io/${USERNAME}/regexybot:latest"
+            GHCR_TAGS="ghcr.io/${REPO}:dev,ghcr.io/${REPO}:next,ghcr.io/${REPO}:latest"
             
             if [ "$VERSION" != "latest" ]; then
               DOCKER_TAGS="${DOCKER_TAGS},docker.io/${USERNAME}/regexybot:dev-${VERSION}"
               GHCR_TAGS="${GHCR_TAGS},ghcr.io/${REPO}:dev-${VERSION}"
             fi
           else
-            # Other branches: just commit hash
-            DOCKER_TAGS="docker.io/${USERNAME}/regexybot:${COMMIT}"
-            GHCR_TAGS="ghcr.io/${REPO}:${COMMIT}"
+            # Other branches: use sanitized branch name
+            # Sanitize: lowercase, replace special chars with dashes, remove leading/trailing dashes
+            SANITIZED_BRANCH=$(echo "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/^-//' | sed 's/-$//' | sed 's/--*/-/g')
+            echo "Building for branch: $BRANCH (sanitized: $SANITIZED_BRANCH)"
+            DOCKER_TAGS="docker.io/${USERNAME}/regexybot:${SANITIZED_BRANCH}"
+            GHCR_TAGS="ghcr.io/${REPO}:${SANITIZED_BRANCH}"
           fi
 
           echo "Docker Tags: $DOCKER_TAGS"

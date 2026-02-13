@@ -1,5 +1,6 @@
 import { LOG_LEVELS, LogLevel } from "./types";
 import { CONFIG } from "./config";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 const globalLogLevel = CONFIG.LOG_LEVEL;
 const globalLogLevelValue =
@@ -9,28 +10,35 @@ const globalLogLevelValue =
 const logTemplate = CONFIG.LOG_TEMPLATE;
 
 /**
- * Formats a timestamp according to the specified format
- * @param date - The date to format
- * @param format - The format type: 'unix', 'ISO', 'datetime', or default
- * @returns Formatted timestamp string
+ * AsyncLocalStorage for correlation IDs
+ * Tracks the current operation context across async calls
  */
-function formatTimestamp(date: Date, format?: string): string {
-	switch (format) {
-		case "unix":
-			return (date.getTime() / 1000).toFixed(3);
-		case "ISO":
-			return date.toISOString();
-		case "datetime":
-		default: {
-			const day = String(date.getDate()).padStart(2, "0");
-			const month = String(date.getMonth() + 1).padStart(2, "0");
-			const year = date.getFullYear();
-			const hours = String(date.getHours()).padStart(2, "0");
-			const minutes = String(date.getMinutes()).padStart(2, "0");
-			const seconds = String(date.getSeconds()).padStart(2, "0");
-			return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-		}
-	}
+const correlationStorage = new AsyncLocalStorage<string>();
+
+/**
+ * Generate a short unique correlation ID
+ * Format: timestamp-random (e.g., "abc123-def456")
+ */
+function generateCorrelationId(): string {
+	const timestamp = Date.now().toString(36).slice(-6);
+	const random = Math.random().toString(36).slice(2, 8);
+	return `${timestamp}-${random}`;
+}
+
+/**
+ * Run a function within a correlation context
+ * All logs inside the function will include this correlation ID
+ */
+export function withCorrelation<T>(fn: () => T): T {
+	const cid = generateCorrelationId();
+	return correlationStorage.run(cid, fn);
+}
+
+/**
+ * Get the current correlation ID, if any
+ */
+export function getCorrelationId(): string | undefined {
+	return correlationStorage.getStore();
 }
 
 export class Logger {
@@ -49,16 +57,14 @@ export class Logger {
 
 		if (LOG_LEVELS[level] < globalLogLevelValue) return;
 
-		const now = new Date();
+		const cid = getCorrelationId();
 
 		const formattedMessage = logTemplate
-			.replace(/{timestamp\((unix|ISO|datetime)\)}/g, (_, format) =>
-				formatTimestamp(now, format),
-			)
-			.replace(/{timestamp}/g, formatTimestamp(now))
 			.replace("{level}", level.toUpperCase())
 			.replace("{module}", this.moduleName)
-			.replace("{message}", message);
+			.replace("{message}", message)
+			.replace(/{cid(:short)?}/g, cid || "-")
+			.replace(/{cid:full}/g, cid || "no-correlation-id");
 
 		// Use console.error for errors and fatals, console.log for everything else
 		const output =

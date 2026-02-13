@@ -9,17 +9,28 @@ import { writeFileSync } from "node:fs";
 import { Bot, Context, GrammyError } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { CONFIG } from "./config";
-import { Logger } from "./logger";
+import { Logger, withCorrelation } from "./logger";
 import { SED_PATTERN } from "./utils";
 import { DatabaseService } from "./database";
 import { WorkerPool } from "./workerPool";
 import { parseSedCommands, SedHandler } from "./sed";
+import { WorkerPoolV2 } from "./workerPoolV2";
+import type { IWorkerPool } from "./workerPoolInterface";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // --- Configuration ---
 const {
 	TOKEN,
 	BASE_URL,
 	WORKER_POOL_SIZE,
+	WORKER_TIMEOUT_MS,
+	WORKER_POOL_V2_ENABLED,
+	WORKER_POOL_MIN_WORKERS,
+	WORKER_POOL_MAX_WORKERS,
+	WORKER_POOL_INITIAL_WORKERS,
+	WORKER_POOL_IDLE_TIMEOUT_MS,
+	WORKER_POOL_IDLE_CHECK_INTERVAL_MS,
 	RETRY_MAX_RETRIES,
 	RETRY_MAX_DELAY_MS,
 	ENABLE_FILE_HEALTHCHECK,
@@ -80,7 +91,25 @@ try {
 const dbService = new DatabaseService(db);
 
 // --- Worker Pool Setup ---
-const workerPool = new WorkerPool(WORKER_POOL_SIZE, "./hellspawn.ts");
+const __filename = fileURLToPath(import.meta.url);
+const workerScriptPath = join(__filename, "..", "hellspawn.ts");
+
+// Use WorkerPoolV2 if enabled, otherwise use legacy WorkerPool
+const workerPool: IWorkerPool = WORKER_POOL_V2_ENABLED
+	? new WorkerPoolV2({
+			maxWorkers: WORKER_POOL_MAX_WORKERS,
+			minWorkers: WORKER_POOL_MIN_WORKERS,
+			initialWorkers: WORKER_POOL_INITIAL_WORKERS,
+			taskTimeoutMs: WORKER_TIMEOUT_MS,
+			idleTimeoutMs: WORKER_POOL_IDLE_TIMEOUT_MS,
+			idleCheckIntervalMs: WORKER_POOL_IDLE_CHECK_INTERVAL_MS,
+			workerScript: workerScriptPath,
+		})
+	: new WorkerPool(WORKER_POOL_SIZE, workerScriptPath);
+
+if (WORKER_POOL_V2_ENABLED) {
+	logger.info("Using WorkerPoolV2 with dynamic scaling");
+}
 
 // --- Sed Handler Setup ---
 async function sendOrEditReply(
@@ -237,27 +266,31 @@ bot.use(myCommands);
 
 // --- Bot Handlers ---
 bot.on("message", async (ctx) => {
-	logger.debug(
-		`Received message: ${ctx.message.text} (ID: ${ctx.message.message_id})`,
-	);
-	await handleTextMessage(
-		ctx,
-		ctx.message.text || ctx.message.caption,
-		ctx.message.message_id,
-		false,
-	);
+	await withCorrelation(async () => {
+		logger.debug(
+			`Received message: ${ctx.message.text} (ID: ${ctx.message.message_id})`,
+		);
+		await handleTextMessage(
+			ctx,
+			ctx.message.text || ctx.message.caption,
+			ctx.message.message_id,
+			false,
+		);
+	});
 });
 
 bot.on("edited_message", async (ctx) => {
-	logger.debug(
-		`Received edited message: ${ctx.editedMessage?.text} (ID: ${ctx.editedMessage?.message_id})`,
-	);
-	await handleTextMessage(
-		ctx,
-		ctx.editedMessage.text || ctx.editedMessage.caption,
-		ctx.editedMessage.message_id,
-		true,
-	);
+	await withCorrelation(async () => {
+		logger.debug(
+			`Received edited message: ${ctx.editedMessage?.text} (ID: ${ctx.editedMessage?.message_id})`,
+		);
+		await handleTextMessage(
+			ctx,
+			ctx.editedMessage.text || ctx.editedMessage.caption,
+			ctx.editedMessage.message_id,
+			true,
+		);
+	});
 });
 
 // --- Global Error Handlers ---
@@ -274,6 +307,7 @@ process.on("uncaughtException", (error: Error) => {
 
 // --- Graceful Shutdown ---
 let isShuttingDown = false;
+let healthcheckInterval: NodeJS.Timeout | null = null;
 
 async function gracefulShutdown(signal: string): Promise<void> {
 	if (isShuttingDown) {
@@ -285,13 +319,36 @@ async function gracefulShutdown(signal: string): Promise<void> {
 	logger.info(`Received ${signal}, starting graceful shutdown...`);
 
 	try {
+		// Clear healthcheck interval if running
+		if (healthcheckInterval) {
+			logger.debug("Clearing healthcheck interval...");
+			clearInterval(healthcheckInterval);
+			healthcheckInterval = null;
+		}
+
 		// Stop accepting new updates from Telegram
 		logger.info("Stopping bot from accepting new updates...");
-		await bot.stop();
+		await Promise.race([
+			bot.stop(),
+			new Promise((_, reject) =>
+				setTimeout(() => reject(new Error("bot.stop() timeout")), 5000),
+			),
+		]);
 
-		// Shut down worker pool - rejects queued tasks and terminates workers
+		// Shut down worker pool
 		logger.info("Shutting down worker pool...");
-		workerPool.shutdown();
+		if (CONFIG.GRACEFUL_DRAIN) {
+			logger.info(
+				`Graceful drain enabled (timeout: ${CONFIG.GRACEFUL_DRAIN_TIMEOUT_MS}ms)`,
+			);
+			await workerPool.shutdown({
+				drainTasks: true,
+				drainTimeoutMs: CONFIG.GRACEFUL_DRAIN_TIMEOUT_MS,
+			});
+		} else {
+			logger.info("Immediate shutdown (graceful drain disabled)");
+			workerPool.shutdown();
+		}
 
 		logger.info("Graceful shutdown complete.");
 		process.exit(0);
@@ -308,7 +365,7 @@ process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 // --- File-based Healthcheck ---
 if (ENABLE_FILE_HEALTHCHECK) {
 	logger.info(`File-based healthcheck enabled (file: ${LIVENESS_FILE})`);
-	setInterval(() => {
+	healthcheckInterval = setInterval(() => {
 		try {
 			writeFileSync(LIVENESS_FILE, Date.now().toString());
 		} catch (error) {

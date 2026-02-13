@@ -8,7 +8,7 @@ import {
 import { CONFIG } from "./config";
 import type { Context } from "grammy";
 import type { CommandsFlavor } from "@grammyjs/commands";
-import type { WorkerPool } from "./workerPool";
+import type { IWorkerPool } from "./workerPoolInterface";
 
 const { MAX_CHAIN_LENGTH, MAX_MESSAGE_LENGTH, WORKER_TIMEOUT_MS } = CONFIG;
 
@@ -38,7 +38,7 @@ export function parseSedCommands(text: string): string[] {
 type MyContext = Context & CommandsFlavor;
 
 export interface SedHandlerDependencies {
-	workerPool: WorkerPool;
+	workerPool: IWorkerPool;
 	sendOrEditReply: (
 		ctx: MyContext,
 		targetMsgId: number,
