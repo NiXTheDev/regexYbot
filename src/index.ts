@@ -18,6 +18,7 @@ import { WorkerPoolV2 } from "./workerPoolV2";
 import type { IWorkerPool } from "./workerPoolInterface";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { RateLimitError, TelegramAPIError } from "./errors";
 
 // --- Configuration ---
 const {
@@ -107,14 +108,9 @@ if (RATE_LIMIT_ENABLED) {
 		// Check if this would exceed limit
 		if (userData.count + commands.length > RATE_LIMIT_COMMANDS_PER_MINUTE) {
 			const remaining = Math.ceil((userData.resetTime - now) / 1000);
-			logger.warn(
-				`Rate limit exceeded for user ${userId}: ${userData.count} + ${commands.length} > ${RATE_LIMIT_COMMANDS_PER_MINUTE}`,
-			);
-			await ctx.reply(
-				`Rate limit exceeded. You've used ${userData.count}/${RATE_LIMIT_COMMANDS_PER_MINUTE} commands this minute. ` +
-					`This message has ${commands.length} command${commands.length > 1 ? "s" : ""}. ` +
-					`Please wait ${remaining} seconds.`,
-			);
+			const error = new RateLimitError(userId, remaining * 1000);
+			logger.debug(error.message);
+			await ctx.reply(error.getUserMessage());
 			return; // Don't process the command
 		}
 
@@ -250,17 +246,23 @@ async function sendOrEditReply(
 		);
 		logger.debug("Successfully sent new reply.");
 	} catch (error) {
-		logger.error("Error sending reply");
-		if (
-			!(
-				error instanceof GrammyError &&
-				error.description.includes("Flood control")
-			)
-		) {
+		// Convert to TelegramAPIError for consistent handling
+		const telegramError =
+			error instanceof GrammyError
+				? new TelegramAPIError(
+						error.description,
+						"sendMessage",
+						error.error_code,
+						error.error_code === 429 || error.error_code >= 500,
+					)
+				: new TelegramAPIError(String(error), "sendMessage", undefined, false);
+
+		logger.error(`${telegramError.message} (code: ${telegramError.code})`);
+
+		// Only show user message for non-retryable errors
+		if (!telegramError.retryable) {
 			try {
-				await ctx.reply(
-					"Failed to send substitution result due to formatting or size.",
-				);
+				await ctx.reply(telegramError.getUserMessage());
 			} catch {
 				// Ignore reply errors
 			}

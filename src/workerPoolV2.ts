@@ -2,6 +2,7 @@ import { Logger } from "./logger";
 import type { TaskMessage, ResultMessage } from "./types";
 import type { IWorkerPool } from "./workerPoolInterface";
 import { HealthMonitor, type HealthMetrics } from "./healthMonitor";
+import { WorkerError } from "./errors";
 
 const logger = new Logger("WorkerPoolV2");
 
@@ -270,7 +271,7 @@ export class WorkerPoolV2 implements IWorkerPool {
 			const duration = Date.now() - pending.startTime;
 			if (result.error) {
 				this.healthMonitor.recordError();
-				pending.reject(new Error(result.error));
+				pending.reject(new WorkerError(result.error, "worker_execution"));
 			} else {
 				this.healthMonitor.recordSuccess(duration);
 				pending.resolve(result);
@@ -300,7 +301,7 @@ export class WorkerPoolV2 implements IWorkerPool {
 		if (pending) {
 			clearTimeout(pending.timeout);
 			this.pendingTasks.delete(worker);
-			pending.reject(new Error(errorMessage));
+			pending.reject(new WorkerError(errorMessage, "worker_error"));
 		}
 
 		// Record error in health monitor
@@ -431,7 +432,9 @@ export class WorkerPoolV2 implements IWorkerPool {
 	 */
 	public run(taskData: TaskMessage): Promise<ResultMessage> {
 		if (this.isShuttingDown) {
-			return Promise.reject(new Error("Worker pool is shutting down"));
+			return Promise.reject(
+				new WorkerError("Worker pool is shutting down", "shutdown"),
+			);
 		}
 
 		logger.debug(`Queueing new task (queue size: ${this.taskQueue.length})`);
@@ -606,7 +609,7 @@ export class WorkerPoolV2 implements IWorkerPool {
 
 		while (this.taskQueue.length > 0) {
 			const { reject } = this.taskQueue.shift()!;
-			reject(new Error("Worker pool is shutting down"));
+			reject(new WorkerError("Worker pool is shutting down", "shutdown"));
 		}
 
 		// Clear all timeouts
@@ -618,7 +621,7 @@ export class WorkerPoolV2 implements IWorkerPool {
 		// Reject pending tasks
 		for (const { reject, timeout } of this.pendingTasks.values()) {
 			clearTimeout(timeout);
-			reject(new Error("Worker pool is shutting down"));
+			reject(new WorkerError("Worker pool is shutting down", "shutdown"));
 		}
 		this.pendingTasks.clear();
 
