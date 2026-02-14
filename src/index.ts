@@ -18,6 +18,7 @@ import { WorkerPoolV2 } from "./workerPoolV2";
 import type { IWorkerPool } from "./workerPoolInterface";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { RateLimitError, TelegramAPIError } from "./errors";
 
 // --- Configuration ---
 const {
@@ -36,6 +37,8 @@ const {
 	ENABLE_FILE_HEALTHCHECK,
 	LIVENESS_FILE,
 	LIVENESS_INTERVAL_MS,
+	RATE_LIMIT_ENABLED,
+	RATE_LIMIT_COMMANDS_PER_MINUTE,
 } = CONFIG;
 
 // --- Type Definitions ---
@@ -55,6 +58,72 @@ bot.api.config.use(
 );
 
 bot.use(commands());
+
+// --- Rate Limiting ---
+if (RATE_LIMIT_ENABLED) {
+	logger.info(
+		`Rate limiting enabled: ${RATE_LIMIT_COMMANDS_PER_MINUTE} commands/minute`,
+	);
+
+	// Store rate limit data per user
+	const userCommandCounts = new Map<
+		number,
+		{ count: number; resetTime: number }
+	>();
+
+	bot.use(async (ctx, next) => {
+		// Skip rate limiting for edited messages (they're corrections, not new spam)
+		if (ctx.editedMessage) {
+			return next();
+		}
+
+		const userId = ctx.from?.id;
+		if (!userId) {
+			return next();
+		}
+
+		// Parse text for sed commands
+		const text = ctx.message?.text || ctx.message?.caption;
+		if (!text) {
+			return next();
+		}
+
+		// Count sed commands in message
+		const commands = parseSedCommands(text);
+		if (commands.length === 0) {
+			// Not a sed command, don't rate limit
+			return next();
+		}
+
+		// Check rate limit
+		const now = Date.now();
+		let userData = userCommandCounts.get(userId);
+
+		if (!userData || now > userData.resetTime) {
+			// Reset or initialize
+			userData = { count: 0, resetTime: now + 60000 };
+			userCommandCounts.set(userId, userData);
+		}
+
+		// Check if this would exceed limit
+		if (userData.count + commands.length > RATE_LIMIT_COMMANDS_PER_MINUTE) {
+			const remaining = Math.ceil((userData.resetTime - now) / 1000);
+			const error = new RateLimitError(userId, remaining * 1000);
+			logger.debug(error.message);
+			await ctx.reply(error.getUserMessage());
+			return; // Don't process the command
+		}
+
+		// Process the command
+		const result = await next();
+
+		// Only count successful commands (no error thrown)
+		// If we get here, the command succeeded
+		userData.count += commands.length;
+
+		return result;
+	});
+}
 
 // --- Database Setup ---
 logger.info("Initializing in-memory database...");
@@ -82,6 +151,10 @@ try {
   `;
 	await db`CREATE INDEX IF NOT EXISTS idx_bot_replies_timestamp ON bot_replies(timestamp)`;
 	await db`CREATE INDEX IF NOT EXISTS idx_message_history_timestamp ON message_history(timestamp)`;
+	// Additional indexes for performance
+	await db`CREATE INDEX IF NOT EXISTS idx_message_history_chat_id ON message_history(chat_id)`;
+	await db`CREATE INDEX IF NOT EXISTS idx_bot_replies_chat_id ON bot_replies(chat_id)`;
+	await db`CREATE INDEX IF NOT EXISTS idx_bot_replies_target ON bot_replies(target_message_id)`;
 	logger.info("Database setup complete.");
 } catch (error) {
 	logger.fatal(`${error}\nDatabase setup failed. Exiting.`);
@@ -173,17 +246,23 @@ async function sendOrEditReply(
 		);
 		logger.debug("Successfully sent new reply.");
 	} catch (error) {
-		logger.error("Error sending reply");
-		if (
-			!(
-				error instanceof GrammyError &&
-				error.description.includes("Flood control")
-			)
-		) {
+		// Convert to TelegramAPIError for consistent handling
+		const telegramError =
+			error instanceof GrammyError
+				? new TelegramAPIError(
+						error.description,
+						"sendMessage",
+						error.error_code,
+						error.error_code === 429 || error.error_code >= 500,
+					)
+				: new TelegramAPIError(String(error), "sendMessage", undefined, false);
+
+		logger.error(`${telegramError.message} (code: ${telegramError.code})`);
+
+		// Only show user message for non-retryable errors
+		if (!telegramError.retryable) {
 			try {
-				await ctx.reply(
-					"Failed to send substitution result due to formatting or size.",
-				);
+				await ctx.reply(telegramError.getUserMessage());
 			} catch {
 				// Ignore reply errors
 			}

@@ -1,8 +1,21 @@
 # AGENTS.md
 
-This file provides guidance to WARP (warp.dev) when working with code in this repository.
-
 ## Tooling & Commands
+
+### Operation workflow and rules
+
+#### Operational workflow(OpenCode)
+
+If not already, list the issues on the repository using gh-cli, `gh issue list`
+
+1. read the lowest number issue, if it's the epic, remember it's contents, and read the next in line
+2. Read the issue, then read the comments on it
+3. put the tasks in the read issue(excl. the epic) into your internal TODO list
+4. implement items in the TODO list one by one
+5. test your implementation using `bun ltf`, delegate to a sub-agent, it should report: if any warnings or errors were generated, how many tests pass/fail/skip and if any do fail, the log of the test that has failed
+6. Fix any problems that have ben mentioned, and when done, commit your work and move onto the next item in the TODO
+7. If the TODO item you just completed was the last one, move onto the next issue
+8. If the issue you had completed was the last one, ask the user to provide a version number that will be used for the PR name, tag and etc., then create the PR that merges changes from `dev` into `release` branch
 
 ### Environment & Dependencies
 

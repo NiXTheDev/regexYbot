@@ -82,7 +82,7 @@ jobs:
         run: bun install -d
 
       - name: Run tests
-        run: bun test
+        run: export TOKEN=${{ secrets.TG_BOT_TOKEN }}; bun test
 
   build-docker:
     name: Build Docker Image (Validation)
