@@ -1,12 +1,16 @@
 // utils.ts
 import { LRUCache } from "./lruCache";
+import { CONFIG } from "./config";
 
 // Regex for sed command, reverting to the original non-greedy version.
 export const SED_PATTERN =
 	/^s\/((?:\\.|[^/])+?)\/((?:\\.|[^/])*?)(?:\/([^]*))?$/;
 
-// LRU Cache for compiled regex patterns (max 1000 entries)
-const regexCache = new LRUCache<string, RegExp>(1000);
+// LRU Cache for compiled regex patterns with TTL support
+const regexCache = new LRUCache<string, RegExp>(
+	CONFIG.CACHE_MAX_SIZE,
+	CONFIG.CACHE_TTL_MS,
+);
 
 /**
  * Get or create a cached compiled regex
@@ -15,6 +19,10 @@ const regexCache = new LRUCache<string, RegExp>(1000);
  * @returns Compiled RegExp
  */
 export function getCachedRegex(pattern: string, flags: string): RegExp {
+	if (!CONFIG.CACHE_ENABLED) {
+		return new RegExp(pattern, flags);
+	}
+
 	const key = `${pattern}:${flags}`;
 	let regex = regexCache.get(key);
 
@@ -29,8 +37,18 @@ export function getCachedRegex(pattern: string, flags: string): RegExp {
 /**
  * Get cache stats for monitoring
  */
-export function getRegexCacheStats(): { size: number; maxSize: number } {
-	return { size: regexCache.size, maxSize: 1000 };
+export function getRegexCacheStats(): {
+	size: number;
+	maxSize: number;
+	ttl: number;
+	enabled: boolean;
+} {
+	return {
+		size: regexCache.size,
+		maxSize: CONFIG.CACHE_MAX_SIZE,
+		ttl: CONFIG.CACHE_TTL_MS,
+		enabled: CONFIG.CACHE_ENABLED,
+	};
 }
 
 // Helper function to get regex flags from a sed command

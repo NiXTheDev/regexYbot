@@ -52,6 +52,11 @@ export interface BotConfig {
 	readonly RATE_LIMIT_ENABLED: boolean;
 	readonly RATE_LIMIT_COMMANDS_PER_MINUTE: number;
 
+	// Caching
+	readonly CACHE_ENABLED: boolean;
+	readonly CACHE_MAX_SIZE: number;
+	readonly CACHE_TTL_MS: number;
+
 	// Message Processing
 	readonly MAX_CHAIN_LENGTH: number;
 	readonly MAX_MESSAGE_LENGTH: number;
@@ -249,6 +254,11 @@ function loadConfig(): BotConfig {
 			1,
 			300,
 		),
+
+		// Caching
+		CACHE_ENABLED: parseBoolEnv("CACHE_ENABLED", true),
+		CACHE_MAX_SIZE: parseIntEnv("CACHE_MAX_SIZE", 1000, 100, 10000),
+		CACHE_TTL_MS: parseIntEnv("CACHE_TTL_MS", 300000, 60000, 600000),
 
 		// Message Processing
 		MAX_CHAIN_LENGTH: parseIntEnv("MAX_CHAIN_LENGTH", 5, 1, 50),
