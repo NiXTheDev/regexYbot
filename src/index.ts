@@ -8,7 +8,6 @@ import { SQL } from "bun";
 import { writeFileSync } from "node:fs";
 import { Bot, Context, GrammyError } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
-import { limit } from "@grammyjs/ratelimiter";
 import { CONFIG } from "./config";
 import { Logger, withCorrelation } from "./logger";
 import { SED_PATTERN } from "./utils";
@@ -156,6 +155,10 @@ try {
   `;
 	await db`CREATE INDEX IF NOT EXISTS idx_bot_replies_timestamp ON bot_replies(timestamp)`;
 	await db`CREATE INDEX IF NOT EXISTS idx_message_history_timestamp ON message_history(timestamp)`;
+	// Additional indexes for performance
+	await db`CREATE INDEX IF NOT EXISTS idx_message_history_chat_id ON message_history(chat_id)`;
+	await db`CREATE INDEX IF NOT EXISTS idx_bot_replies_chat_id ON bot_replies(chat_id)`;
+	await db`CREATE INDEX IF NOT EXISTS idx_bot_replies_target ON bot_replies(target_message_id)`;
 	logger.info("Database setup complete.");
 } catch (error) {
 	logger.fatal(`${error}\nDatabase setup failed. Exiting.`);

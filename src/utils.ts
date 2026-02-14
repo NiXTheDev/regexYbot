@@ -1,8 +1,37 @@
 // utils.ts
+import { LRUCache } from "./lruCache";
 
 // Regex for sed command, reverting to the original non-greedy version.
 export const SED_PATTERN =
 	/^s\/((?:\\.|[^/])+?)\/((?:\\.|[^/])*?)(?:\/([^]*))?$/;
+
+// LRU Cache for compiled regex patterns (max 1000 entries)
+const regexCache = new LRUCache<string, RegExp>(1000);
+
+/**
+ * Get or create a cached compiled regex
+ * @param pattern - The regex pattern string
+ * @param flags - Regex flags (e.g., 'gi')
+ * @returns Compiled RegExp
+ */
+export function getCachedRegex(pattern: string, flags: string): RegExp {
+	const key = `${pattern}:${flags}`;
+	let regex = regexCache.get(key);
+
+	if (!regex) {
+		regex = new RegExp(pattern, flags);
+		regexCache.set(key, regex);
+	}
+
+	return regex;
+}
+
+/**
+ * Get cache stats for monitoring
+ */
+export function getRegexCacheStats(): { size: number; maxSize: number } {
+	return { size: regexCache.size, maxSize: 1000 };
+}
 
 // Helper function to get regex flags from a sed command
 export function getRegexFlags(flagsMatch: string | undefined): {
