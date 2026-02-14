@@ -64,19 +64,70 @@ if (RATE_LIMIT_ENABLED) {
 	logger.info(
 		`Rate limiting enabled: ${RATE_LIMIT_COMMANDS_PER_MINUTE} commands/minute`,
 	);
-	bot.use(
-		limit({
-			timeFrame: 60000, // 1 minute in milliseconds
-			limit: RATE_LIMIT_COMMANDS_PER_MINUTE,
-			onLimitExceeded: async (ctx) => {
-				logger.warn(`Rate limit exceeded for user ${ctx.from?.id}`);
-				await ctx.reply(
-					`Rate limit exceeded. Please wait before trying again. ` +
-						`You can send up to ${RATE_LIMIT_COMMANDS_PER_MINUTE} commands per minute.`,
-				);
-			},
-		}),
-	);
+
+	// Store rate limit data per user
+	const userCommandCounts = new Map<
+		number,
+		{ count: number; resetTime: number }
+	>();
+
+	bot.use(async (ctx, next) => {
+		// Skip rate limiting for edited messages (they're corrections, not new spam)
+		if (ctx.editedMessage) {
+			return next();
+		}
+
+		const userId = ctx.from?.id;
+		if (!userId) {
+			return next();
+		}
+
+		// Parse text for sed commands
+		const text = ctx.message?.text || ctx.message?.caption;
+		if (!text) {
+			return next();
+		}
+
+		// Count sed commands in message
+		const commands = parseSedCommands(text);
+		if (commands.length === 0) {
+			// Not a sed command, don't rate limit
+			return next();
+		}
+
+		// Check rate limit
+		const now = Date.now();
+		let userData = userCommandCounts.get(userId);
+
+		if (!userData || now > userData.resetTime) {
+			// Reset or initialize
+			userData = { count: 0, resetTime: now + 60000 };
+			userCommandCounts.set(userId, userData);
+		}
+
+		// Check if this would exceed limit
+		if (userData.count + commands.length > RATE_LIMIT_COMMANDS_PER_MINUTE) {
+			const remaining = Math.ceil((userData.resetTime - now) / 1000);
+			logger.warn(
+				`Rate limit exceeded for user ${userId}: ${userData.count} + ${commands.length} > ${RATE_LIMIT_COMMANDS_PER_MINUTE}`,
+			);
+			await ctx.reply(
+				`Rate limit exceeded. You've used ${userData.count}/${RATE_LIMIT_COMMANDS_PER_MINUTE} commands this minute. ` +
+					`This message has ${commands.length} command${commands.length > 1 ? "s" : ""}. ` +
+					`Please wait ${remaining} seconds.`,
+			);
+			return; // Don't process the command
+		}
+
+		// Process the command
+		const result = await next();
+
+		// Only count successful commands (no error thrown)
+		// If we get here, the command succeeded
+		userData.count += commands.length;
+
+		return result;
+	});
 }
 
 // --- Database Setup ---
