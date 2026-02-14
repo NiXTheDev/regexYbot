@@ -48,6 +48,10 @@ export interface BotConfig {
 	readonly GRACEFUL_DRAIN: boolean;
 	readonly GRACEFUL_DRAIN_TIMEOUT_MS: number;
 
+	// Rate Limiting
+	readonly RATE_LIMIT_ENABLED: boolean;
+	readonly RATE_LIMIT_COMMANDS_PER_MINUTE: number;
+
 	// Message Processing
 	readonly MAX_CHAIN_LENGTH: number;
 	readonly MAX_MESSAGE_LENGTH: number;
@@ -235,6 +239,15 @@ function loadConfig(): BotConfig {
 			8000,
 			1000,
 			9500, // Max 9.5s to fit in Docker's 10s grace period
+		),
+
+		// Rate Limiting
+		RATE_LIMIT_ENABLED: parseBoolEnv("RATE_LIMIT_ENABLED", true),
+		RATE_LIMIT_COMMANDS_PER_MINUTE: parseIntEnv(
+			"RATE_LIMIT_COMMANDS_PER_MINUTE",
+			30,
+			1,
+			300,
 		),
 
 		// Message Processing

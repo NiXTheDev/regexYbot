@@ -8,6 +8,7 @@ import { SQL } from "bun";
 import { writeFileSync } from "node:fs";
 import { Bot, Context, GrammyError } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
+import { limit } from "@grammyjs/ratelimiter";
 import { CONFIG } from "./config";
 import { Logger, withCorrelation } from "./logger";
 import { SED_PATTERN } from "./utils";
@@ -36,6 +37,8 @@ const {
 	ENABLE_FILE_HEALTHCHECK,
 	LIVENESS_FILE,
 	LIVENESS_INTERVAL_MS,
+	RATE_LIMIT_ENABLED,
+	RATE_LIMIT_COMMANDS_PER_MINUTE,
 } = CONFIG;
 
 // --- Type Definitions ---
@@ -55,6 +58,26 @@ bot.api.config.use(
 );
 
 bot.use(commands());
+
+// --- Rate Limiting ---
+if (RATE_LIMIT_ENABLED) {
+	logger.info(
+		`Rate limiting enabled: ${RATE_LIMIT_COMMANDS_PER_MINUTE} commands/minute`,
+	);
+	bot.use(
+		limit({
+			timeFrame: 60000, // 1 minute in milliseconds
+			limit: RATE_LIMIT_COMMANDS_PER_MINUTE,
+			onLimitExceeded: async (ctx) => {
+				logger.warn(`Rate limit exceeded for user ${ctx.from?.id}`);
+				await ctx.reply(
+					`Rate limit exceeded. Please wait before trying again. ` +
+						`You can send up to ${RATE_LIMIT_COMMANDS_PER_MINUTE} commands per minute.`,
+				);
+			},
+		}),
+	);
+}
 
 // --- Database Setup ---
 logger.info("Initializing in-memory database...");
