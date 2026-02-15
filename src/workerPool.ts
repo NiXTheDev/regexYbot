@@ -2,6 +2,7 @@ import { Logger } from "./logger";
 import type { ResultMessage, TaskMessage } from "./types";
 import { CONFIG } from "./config";
 import type { IWorkerPool } from "./workerPoolInterface";
+import { WorkerError } from "./errors";
 
 const logger = new Logger("WorkerPool");
 const { WORKER_TIMEOUT_MS } = CONFIG;
@@ -85,7 +86,13 @@ export class WorkerPool implements IWorkerPool {
 		}
 		const pending = this.pendingTasks.get(worker);
 		if (pending) {
-			pending.reject(new Error(errorMessage));
+			pending.reject(
+				new WorkerError(
+					errorMessage,
+					"worker_error",
+					this.workers.indexOf(worker),
+				),
+			);
 			this.pendingTasks.delete(worker);
 		}
 		this.replaceWorker(worker);
@@ -101,8 +108,14 @@ export class WorkerPool implements IWorkerPool {
 		}
 		const pending = this.pendingTasks.get(worker);
 		if (pending) {
+			const workerIndex = this.workers.indexOf(worker);
 			pending.reject(
-				new Error(`Regex operation timed out after ${WORKER_TIMEOUT_MS}ms`),
+				new WorkerError(
+					`Regex operation timed out after ${WORKER_TIMEOUT_MS}ms`,
+					"worker_timeout",
+					workerIndex,
+					{ timeout: WORKER_TIMEOUT_MS },
+				),
 			);
 			this.pendingTasks.delete(worker);
 		}
@@ -152,7 +165,7 @@ export class WorkerPool implements IWorkerPool {
 		// Reject all queued tasks
 		while (this.taskQueue.length > 0) {
 			const { reject } = this.taskQueue.shift()!;
-			reject(new Error("Worker pool is shutting down"));
+			reject(new WorkerError("Worker pool is shutting down", "shutdown"));
 		}
 
 		// Clear all timeouts and terminate workers

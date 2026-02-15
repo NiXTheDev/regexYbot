@@ -3,6 +3,80 @@
 All notable changes to this project will be documented in this file.
 
 <details open>
+<summary><b>[0.1.9] - 2026-02-15</b></summary>
+
+### Epic: regexYbot Enhancement Roadmap
+
+Complete overhaul with 6 major feature areas, 166 tests, and comprehensive documentation.
+
+### Health Monitoring & Observability (#27)
+
+- **HealthMonitor System**: Real-time health tracking with status detection
+  - Automatic status calculation: healthy/degraded/unhealthy
+  - Configurable thresholds for error rates and queue depth
+  - Event-driven status change notifications
+  - 14 comprehensive tests covering all health scenarios
+
+### Test Suite Expansion (#28)
+
+- **80+ New Tests**: Expanded from 77 to 166 tests
+  - `config.test.ts`: 24 tests for configuration validation
+  - `logger.test.ts`: 11 tests for logging functionality
+  - `errorHandling.test.ts`: 19 tests for error scenarios
+  - `telegram.test.ts`: 12 tests for Telegram integration
+  - Full coverage of new features and edge cases
+
+### Security & Anti-Spam (#29)
+
+- **Per-User Rate Limiting**: Configurable spam prevention
+  - Default: 30 commands/minute per user
+  - Smart counting: N commands in message = N points
+  - Skips edits (corrections, not spam)
+  - User-friendly error messages with wait times
+
+### Performance Optimizations (#30)
+
+- **Regex Pattern Caching**: LRU cache with TTL support
+  - Default: 1000 patterns, 5-minute TTL
+  - Configurable via `CACHE_ENABLED`, `CACHE_MAX_SIZE`, `CACHE_TTL_MS`
+  - Significant performance boost for repeated patterns
+- **Database Indexes**: Added indexes for faster queries
+  - `idx_message_history_chat_id` for chat lookups
+  - `idx_bot_replies_target` for reply mapping lookups
+
+### Error Handling & Resilience (#31)
+
+- **Custom Error Hierarchy**: 6 granular error types
+  - `BotError` (base), `RegexError`, `TelegramAPIError`
+  - `RateLimitError`, `WorkerError`, `CircuitBreakerError`
+  - User-friendly error messages with context
+- **Circuit Breaker Pattern**: Prevents cascading failures
+  - States: CLOSED → OPEN → HALF_OPEN
+  - Configurable thresholds and timeouts
+  - Automatic recovery after cooldown period
+
+### Code Quality (#34)
+
+- **JSDoc Documentation**: Comprehensive inline docs
+  - DatabaseService methods fully documented
+  - Parameter types and return values specified
+  - Usage examples and edge cases explained
+- **Zero Lint Warnings**: Clean codebase
+  - Fixed all `any` type warnings in tests
+  - Added proper type annotations
+  - 166 tests with zero warnings
+
+### Documentation (#35)
+
+- **Updated README**: Complete feature list and env vars
+  - Added all 25+ environment variables
+  - Documented WorkerPoolV2, rate limiting, caching
+  - New features: health monitoring, circuit breaker
+- **Enhanced CHANGELOG**: This release notes section
+
+</details>
+
+<details>
 <summary><b>[0.1.7.1] - 2026-02-09</b></summary>
 
 ### Architecture Refactoring

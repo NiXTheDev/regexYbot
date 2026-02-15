@@ -9,6 +9,7 @@ import { CONFIG } from "./config";
 import type { Context } from "grammy";
 import type { CommandsFlavor } from "@grammyjs/commands";
 import type { IWorkerPool } from "./workerPoolInterface";
+import { RegexError, WorkerError } from "./errors";
 
 const { MAX_CHAIN_LENGTH, MAX_MESSAGE_LENGTH, WORKER_TIMEOUT_MS } = CONFIG;
 
@@ -114,11 +115,33 @@ export class SedHandler {
 				);
 			} catch (error: unknown) {
 				this.logger.error(String(error), "Worker pool task failed");
-				const errorMessage =
-					error instanceof Error && error.message.includes("timed out")
-						? `Regex operation timed out after ${WORKER_TIMEOUT_MS / 1000}s. Please use a simpler pattern.`
-						: "The substitution process failed.";
-				await ctx.reply(errorMessage);
+
+				// Convert to custom error types for consistent handling
+				let botError: WorkerError | RegexError;
+				if (error instanceof Error && error.message.includes("timed out")) {
+					botError = new WorkerError(
+						`Regex operation timed out after ${WORKER_TIMEOUT_MS / 1000}s`,
+						"regex_execution",
+						undefined,
+						{ timeout: WORKER_TIMEOUT_MS },
+					);
+				} else if (
+					error instanceof Error &&
+					error.message.includes("Invalid regular expression")
+				) {
+					botError = new RegexError(
+						commandForWorker.pattern,
+						commandForWorker.flags,
+						error instanceof Error ? error : undefined,
+					);
+				} else {
+					botError = new WorkerError(
+						error instanceof Error ? error.message : String(error),
+						"regex_execution",
+					);
+				}
+
+				await ctx.reply(botError.getUserMessage());
 				return;
 			}
 		}

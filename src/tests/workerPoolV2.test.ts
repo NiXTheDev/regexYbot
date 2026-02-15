@@ -177,7 +177,7 @@ describeV2("WorkerPoolV2", () => {
 		await shutdownPromise;
 
 		// Mark as shut down so afterEach doesn't fail
-		(pool as any).isShuttingDown = true;
+		pool["isShuttingDown"] = true;
 	});
 
 	test("scales past maxWorkers during shutdown with draining", async () => {
@@ -241,9 +241,9 @@ describeV2("WorkerPoolV2", () => {
 			expect(results).toHaveLength(15);
 
 			// Mark as shut down
-			(drainPool as any).isShuttingDown = true;
+			drainPool["isShuttingDown"] = true;
 		} finally {
-			if (!(drainPool as any).isShuttingDown) {
+			if (!drainPool["isShuttingDown"]) {
 				await drainPool.shutdown();
 			}
 		}
