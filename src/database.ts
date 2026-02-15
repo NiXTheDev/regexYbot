@@ -11,12 +11,32 @@ const { CLEANUP_INTERVAL_MS, MAX_HISTORY_PER_CHAT, HISTORY_QUERY_LIMIT } =
 
 type MyContext = Context & CommandsFlavor;
 
+/**
+ * Service class for managing database operations
+ *
+ * Handles all SQLite interactions for message history, reply tracking,
+ * and cleanup operations. Uses Bun's native SQL support for optimal performance.
+ */
 export class DatabaseService {
+	/** SQLite database instance */
 	private db: SQL;
+
+	/**
+	 * Creates a new DatabaseService instance
+	 * @param database - The SQLite database instance to use
+	 */
 	constructor(database: SQL) {
 		this.db = database;
 	}
 
+	/**
+	 * Cleans up old entries from message history and bot replies tables
+	 *
+	 * Removes entries older than CLEANUP_INTERVAL_MS (default 48 hours).
+	 * Should be called periodically to prevent memory bloat.
+	 *
+	 * @returns Promise that resolves when cleanup is complete
+	 */
 	async cleanupOldEntries(): Promise<void> {
 		const cutoffTime = new Date(Date.now() - CLEANUP_INTERVAL_MS).toISOString();
 		const historyResult = await this
@@ -30,6 +50,17 @@ export class DatabaseService {
 		}
 	}
 
+	/**
+	 * Stores a message in the history table
+	 *
+	 * If the chat has reached MAX_HISTORY_PER_CHAT, oldest entries are removed.
+	 * Messages matching SED_PATTERN (sed commands) are not stored.
+	 *
+	 * @param chatId - The Telegram chat ID
+	 * @param messageId - The Telegram message ID
+	 * @param text - The message text content
+	 * @returns Promise that resolves when storage is complete
+	 */
 	async storeMessageInHistory(
 		chatId: number,
 		messageId: number,
@@ -55,6 +86,17 @@ export class DatabaseService {
 			.db`INSERT OR REPLACE INTO message_history (chat_id, message_id, text) VALUES (${chatId}, ${messageId}, ${text ?? ""})`;
 	}
 
+	/**
+	 * Finds a target message for sed substitution
+	 *
+	 * First checks for a reply-to message, then searches through
+	 * recent history for a message matching the regex pattern.
+	 *
+	 * @param ctx - The Telegram bot context
+	 * @param match - The regex match array from the sed command
+	 * @param excludeMessageId - Optional message ID to exclude from search (for edits)
+	 * @returns Object containing target message text and ID, or empty object if not found
+	 */
 	async findTargetMessage(
 		ctx: MyContext,
 		match: RegExpMatchArray,
