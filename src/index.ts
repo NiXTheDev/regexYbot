@@ -14,7 +14,7 @@ import { SED_PATTERN } from "./utils";
 import { DatabaseService } from "./database";
 import { WorkerPool } from "./workerPool";
 import { parseSedCommands, SedHandler } from "./sed";
-import type { IWorkerPool } from "./workerPoolInterface";
+import type { IWorkerPool } from "./types";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { RateLimitError, TelegramAPIError } from "./errors";

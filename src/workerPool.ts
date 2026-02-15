@@ -1,6 +1,6 @@
 import { Logger } from "./logger";
 import type { TaskMessage, ResultMessage } from "./types";
-import type { IWorkerPool } from "./workerPoolInterface";
+import type { IWorkerPool } from "./types";
 import { HealthMonitor, type HealthMetrics } from "./healthMonitor";
 import { WorkerError } from "./errors";
 

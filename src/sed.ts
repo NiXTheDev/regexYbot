@@ -1,5 +1,5 @@
 import { Logger } from "./logger";
-import type { SedCommand, TaskMessage } from "./types";
+import type { SedCommand, TaskMessage, IWorkerPool } from "./types";
 import {
 	SED_PATTERN,
 	getRegexFlags,
@@ -8,7 +8,6 @@ import {
 import { CONFIG } from "./config";
 import type { Context } from "grammy";
 import type { CommandsFlavor } from "@grammyjs/commands";
-import type { IWorkerPool } from "./workerPoolInterface";
 import { RegexError, WorkerError } from "./errors";
 
 const { MAX_CHAIN_LENGTH, MAX_MESSAGE_LENGTH, WORKER_TIMEOUT_MS } = CONFIG;
