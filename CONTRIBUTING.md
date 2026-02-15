@@ -134,7 +134,7 @@ bun run ltf
 bun ltf
 ```
 
-This runs: format -> typecheck -> lint -> test (in that order)
+This runs: format -> typecheck -> lint -> test (technically the same order as CI/CD, but the first three steps run in parallel there, whereas the script runs one step at a time)
 
 ### Individual Commands
 
