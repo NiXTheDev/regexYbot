@@ -38,22 +38,13 @@ describe("Configuration", () => {
 	});
 
 	describe("Worker Pool configuration", () => {
-		test("should have positive WORKER_POOL_SIZE", () => {
-			expect(CONFIG.WORKER_POOL_SIZE).toBeDefined();
-			expect(CONFIG.WORKER_POOL_SIZE).toBeGreaterThan(0);
-		});
-
 		test("should have positive WORKER_TIMEOUT_MS", () => {
 			expect(CONFIG.WORKER_TIMEOUT_MS).toBeDefined();
 			expect(CONFIG.WORKER_TIMEOUT_MS).toBeGreaterThan(0);
 		});
 	});
 
-	describe("Worker Pool V2 configuration", () => {
-		test("should have valid WORKER_POOL_V2_ENABLED", () => {
-			expect(typeof CONFIG.WORKER_POOL_V2_ENABLED).toBe("boolean");
-		});
-
+	describe("Worker Pool configuration", () => {
 		test("should have valid min/max workers", () => {
 			expect(CONFIG.WORKER_POOL_MIN_WORKERS).toBeGreaterThanOrEqual(0);
 			expect(CONFIG.WORKER_POOL_MAX_WORKERS).toBeGreaterThanOrEqual(

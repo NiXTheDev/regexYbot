@@ -1,8 +1,7 @@
 import type { TaskMessage, ResultMessage } from "./types";
 
 /**
- * Common interface for all worker pool implementations
- * Both WorkerPool (v1) and WorkerPoolV2 implement this interface
+ * Common interface for worker pool implementation
  */
 export interface IWorkerPool {
 	/**
@@ -12,7 +11,7 @@ export interface IWorkerPool {
 
 	/**
 	 * Graceful shutdown
-	 * @param options - Optional shutdown configuration (WorkerPoolV2 supports drainTasks)
+	 * @param options - Optional shutdown configuration
 	 */
 	shutdown(options?: {
 		drainTasks?: boolean;
