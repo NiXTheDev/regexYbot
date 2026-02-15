@@ -454,6 +454,7 @@ export class WorkerPoolV2 implements IWorkerPool {
 		busyWorkers: number;
 		queuedTasks: number;
 		pendingTasks: number;
+		isShuttingDown: boolean;
 		health: HealthMetrics;
 	} {
 		let idleWorkers = 0;
@@ -480,6 +481,7 @@ export class WorkerPoolV2 implements IWorkerPool {
 			busyWorkers,
 			queuedTasks: this.taskQueue.length,
 			pendingTasks: this.pendingTasks.size,
+			isShuttingDown: this.isShuttingDown,
 			health,
 		};
 	}

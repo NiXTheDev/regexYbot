@@ -208,7 +208,7 @@ function loadConfig(): BotConfig {
 		NODE_ENV: nodeEnv,
 
 		// Worker Pool
-		WORKER_POOL_SIZE: parseIntEnv("WORKER_POOL_SIZE", 4, 1, 32),
+		WORKER_POOL_SIZE: parseIntEnv("WORKER_POOL_SIZE", 4, 1),
 		WORKER_TIMEOUT_MS: parseIntEnv(
 			"WORKER_TIMEOUT_MS",
 			60 * 1000,
