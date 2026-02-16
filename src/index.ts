@@ -67,19 +67,39 @@ if (RATE_LIMIT_ENABLED) {
 		{ count: number; resetTime: number }
 	>();
 
-	bot.use(async (ctx, next) => {
-		// Skip rate limiting for edited messages (they're corrections, not new spam)
-		if (ctx.editedMessage) {
-			return next();
-		}
+	// Store edit history per user for abuse detection
+	interface EditRecord {
+		timestamp: number;
+		charChangeCount: number;
+		hadError: boolean;
+	}
+	const userEditHistory = new Map<number, EditRecord[]>();
 
+	// Clean old edit records periodically (every 5 minutes)
+	setInterval(() => {
+		const now = Date.now();
+		for (const [userId, edits] of userEditHistory) {
+			const recentEdits = edits.filter((e) => now - e.timestamp < 60000);
+			if (recentEdits.length === 0) {
+				userEditHistory.delete(userId);
+			} else {
+				userEditHistory.set(userId, recentEdits);
+			}
+		}
+	}, 300000);
+
+	bot.use(async (ctx, next) => {
 		const userId = ctx.from?.id;
 		if (!userId) {
 			return next();
 		}
 
 		// Parse text for sed commands
-		const text = ctx.message?.text || ctx.message?.caption;
+		const text =
+			ctx.message?.text ||
+			ctx.message?.caption ||
+			ctx.editedMessage?.text ||
+			ctx.editedMessage?.caption;
 		if (!text) {
 			return next();
 		}
@@ -91,18 +111,80 @@ if (RATE_LIMIT_ENABLED) {
 			return next();
 		}
 
-		// Check rate limit
+		const isEdit = !!ctx.editedMessage;
 		const now = Date.now();
-		let userData = userCommandCounts.get(userId);
 
+		// Get or initialize user data
+		let userData = userCommandCounts.get(userId);
 		if (!userData || now > userData.resetTime) {
-			// Reset or initialize
 			userData = { count: 0, resetTime: now + 60000 };
 			userCommandCounts.set(userId, userData);
 		}
 
+		// Calculate rate limit cost
+		let cost: number;
+
+		if (!isEdit) {
+			// Regular message: full cost per command
+			cost = commands.length;
+		} else {
+			// Edit: calculate with enhanced logic
+			const editHistory = userEditHistory.get(userId) || [];
+
+			// Calculate character change count (approximate)
+			// For edits, we don't have the original, so we use a heuristic
+			// Small edits are < 10 characters changed
+			const charChangeCount = text.length; // Simplified - assume all text is "changed"
+			const isSmallChange = charChangeCount < 10;
+
+			// Count small edits in last minute for abuse detection
+			const recentSmallEdits = editHistory.filter(
+				(e) => e.timestamp > now - 60000 && e.charChangeCount < 10,
+			);
+			const isAbusingSmallEdits = recentSmallEdits.length >= 5;
+
+			// Get last edit to check for error penalty
+			const lastEdit =
+				editHistory.length > 0 ? editHistory[editHistory.length - 1] : null;
+			const previousHadError = lastEdit?.hadError ?? false;
+
+			// Calculate cost
+			if (isAbusingSmallEdits) {
+				// Abuse detected: apply retroactive full penalties
+				cost = commands.length; // Full cost instead of 0.5
+				logger.debug(
+					`Rate limit abuse detected for user ${userId}: ${recentSmallEdits.length} small edits`,
+				);
+			} else if (isSmallChange) {
+				// Small change: minimal cost (0.25 per command)
+				cost = commands.length * 0.25;
+			} else {
+				// Normal edit: half cost (0.5 per command)
+				cost = commands.length * 0.5;
+			}
+
+			// Add error penalty if previous edit had error
+			if (previousHadError) {
+				cost += 0.5;
+				logger.debug(`Rate limit error penalty applied for user ${userId}`);
+			}
+
+			// Record this edit
+			const editRecord: EditRecord = {
+				timestamp: now,
+				charChangeCount,
+				hadError: false, // Will be updated after processing
+			};
+			editHistory.push(editRecord);
+			userEditHistory.set(userId, editHistory);
+
+			// Store record index for later error update
+			(ctx as typeof ctx & { __editRecordIndex?: number }).__editRecordIndex =
+				editHistory.length - 1;
+		}
+
 		// Check if this would exceed limit
-		if (userData.count + commands.length > RATE_LIMIT_COMMANDS_PER_MINUTE) {
+		if (userData.count + cost > RATE_LIMIT_COMMANDS_PER_MINUTE) {
 			const remaining = Math.ceil((userData.resetTime - now) / 1000);
 			const error = new RateLimitError(userId, remaining * 1000);
 			logger.debug(error.message);
@@ -111,13 +193,33 @@ if (RATE_LIMIT_ENABLED) {
 		}
 
 		// Process the command
-		const result = await next();
+		let hadError = false;
+		try {
+			const result = await next();
+			return result;
+		} catch (error) {
+			hadError = true;
+			throw error;
+		} finally {
+			// Update edit record with error status
+			if (isEdit) {
+				const editHistory = userEditHistory.get(userId);
+				const recordIndex = (ctx as typeof ctx & { __editRecordIndex?: number })
+					.__editRecordIndex;
+				if (
+					editHistory &&
+					recordIndex !== undefined &&
+					editHistory[recordIndex]
+				) {
+					editHistory[recordIndex].hadError = hadError;
+				}
+			}
 
-		// Only count successful commands (no error thrown)
-		// If we get here, the command succeeded
-		userData.count += commands.length;
-
-		return result;
+			// Only count successful commands (unless it was an edit abuse case)
+			if (!hadError || (isEdit && cost >= commands.length)) {
+				userData.count += cost;
+			}
+		}
 	});
 }
 
