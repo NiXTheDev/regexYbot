@@ -18,6 +18,54 @@ import {
 
 const { MAX_CHAIN_LENGTH, MAX_MESSAGE_LENGTH, WORKER_TIMEOUT_MS } = CONFIG;
 
+/**
+ * Track performance message info for edit handling
+ */
+interface PerformanceMessageInfo {
+	chatId: number;
+	targetMessageId: number;
+	resultMessageId: number;
+	performanceMessageId?: number;
+	isInlined: boolean;
+	timestamp: number;
+}
+
+// In-memory storage for performance message tracking (no persistence)
+const performanceMessageTracker = new Map<string, PerformanceMessageInfo>();
+
+// Cleanup old entries after 48 hours (matching Telegram edit window)
+setInterval(
+	() => {
+		const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+		for (const [key, info] of performanceMessageTracker) {
+			if (info.timestamp < cutoff) {
+				performanceMessageTracker.delete(key);
+			}
+		}
+	},
+	60 * 60 * 1000,
+); // Run cleanup every hour
+
+/**
+ * Format duration in human-readable units
+ */
+function formatDuration(ms: number): string {
+	if (ms < 1000) {
+		return `${Math.round(ms)}ms`;
+	}
+	if (ms < 60000) {
+		return `${(ms / 1000).toFixed(1)}s`;
+	}
+	if (ms < 3600000) {
+		const minutes = Math.floor(ms / 60000);
+		const seconds = Math.round((ms % 60000) / 1000);
+		return `${minutes}m ${seconds}s`;
+	}
+	const hours = Math.floor(ms / 3600000);
+	const minutes = Math.floor((ms % 3600000) / 60000);
+	return `${hours}h ${minutes}m`;
+}
+
 export function parseSedCommands(text: string): string[] {
 	const lines = text.split("\n");
 	const commands: string[] = [];
@@ -79,6 +127,7 @@ export class SedHandler {
 
 		const startTime = hasPerformanceFlag ? performance.now() : undefined;
 		let currentText = targetMsgText;
+		let substitutionCount = 0;
 
 		for (const commandString of sedCommands.slice(0, MAX_CHAIN_LENGTH)) {
 			const match = commandString.match(SED_PATTERN);
@@ -126,6 +175,7 @@ export class SedHandler {
 					return;
 				}
 				currentText = result.result;
+				substitutionCount++;
 				this.logger.debug(
 					`Command result. New text length: ${currentText.length}`,
 				);
@@ -167,26 +217,56 @@ export class SedHandler {
 			totalPerformanceMs = performance.now() - startTime;
 		}
 
-		let finalMessage = currentText.slice(0, MAX_MESSAGE_LENGTH);
-		if (totalPerformanceMs !== null) {
-			const performanceInfo = ` (⏱️ ${totalPerformanceMs.toFixed(2)}ms)`;
-			if (finalMessage.length + performanceInfo.length > MAX_MESSAGE_LENGTH) {
-				finalMessage =
-					finalMessage.slice(0, MAX_MESSAGE_LENGTH - performanceInfo.length) +
-					performanceInfo;
-			} else {
-				finalMessage += performanceInfo;
-			}
-		}
-
 		// Record successful substitution
 		recordSubstitution();
+
+		// Prepare the result message
+		let resultText = currentText.slice(0, MAX_MESSAGE_LENGTH);
+		let performanceText: string | null = null;
+
+		if (hasPerformanceFlag && totalPerformanceMs !== null) {
+			const formattedTime = formatDuration(totalPerformanceMs);
+			performanceText = `Performed ${substitutionCount} substitution${substitutionCount !== 1 ? "s" : ""} in ${formattedTime}`;
+
+			// Calculate if performance text fits inline
+			// Need: result + "\n\n" + performanceText <= MAX_MESSAGE_LENGTH
+			const separatorLength = 2; // "\n\n"
+			const totalLength =
+				resultText.length + separatorLength + performanceText.length;
+
+			if (totalLength <= MAX_MESSAGE_LENGTH) {
+				// Fits inline - add to result
+				resultText += "\n\n" + performanceText;
+				performanceText = null; // Don't send separately
+			}
+			// If doesn't fit, performanceText remains non-null for separate message
+		}
 
 		await this.deps.sendOrEditReply(
 			ctx,
 			targetMsgId,
-			escapeForMarkdownV2AndBackslashes(finalMessage),
+			escapeForMarkdownV2AndBackslashes(resultText),
 			isEdit,
 		);
+
+		// Send separate performance message if needed
+		if (performanceText) {
+			const sentPerfMsg = await ctx.reply(performanceText);
+			// Store tracking info for edit handling
+			const chatId = ctx.chat?.id;
+			if (chatId) {
+				const key = `${chatId}:${targetMsgId}`;
+				// We need the result message ID - get it from the bot_replies tracking
+				// This will be updated when sendOrEditReply stores it
+				performanceMessageTracker.set(key, {
+					chatId,
+					targetMessageId: targetMsgId,
+					resultMessageId: 0, // Will be updated
+					performanceMessageId: sentPerfMsg.message_id,
+					isInlined: false,
+					timestamp: Date.now(),
+				});
+			}
+		}
 	}
 }
