@@ -10,6 +10,11 @@ import { CONFIG } from "./config";
 import { RegexError, WorkerError } from "./errors";
 import type { MyContext } from "./i18n";
 import { recordSubstitution } from "./metrics";
+import {
+	detectDangerousPattern,
+	formatDangerousPatternWarning,
+	isSimplePattern,
+} from "./dangerousPatterns";
 
 const { MAX_CHAIN_LENGTH, MAX_MESSAGE_LENGTH, WORKER_TIMEOUT_MS } = CONFIG;
 
@@ -95,6 +100,19 @@ export class SedHandler {
 			this.logger.debug(
 				`Executing command: pattern="${commandForWorker.pattern}", flags="${commandForWorker.flags}", replacement="${commandForWorker.replacement}"`,
 			);
+
+			// Check for dangerous patterns (warn but don't block)
+			if (!isSimplePattern(commandForWorker.pattern)) {
+				const dangerCheck = detectDangerousPattern(commandForWorker.pattern);
+				if (dangerCheck.detected) {
+					this.logger.warn(
+						`Dangerous pattern detected: ${commandForWorker.pattern} (score: ${dangerCheck.complexityScore})`,
+					);
+					// Show warning but continue execution
+					const warning = formatDangerousPatternWarning(dangerCheck);
+					await ctx.reply(warning, { parse_mode: "Markdown" });
+				}
+			}
 
 			try {
 				const task: TaskMessage = {
