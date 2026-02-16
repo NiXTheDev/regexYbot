@@ -15,6 +15,7 @@ import {
 	formatDangerousPatternWarning,
 	isSimplePattern,
 } from "./dangerousPatterns";
+import { getBestTip, sendTransientTip } from "./optimizationTips";
 
 const { MAX_CHAIN_LENGTH, MAX_MESSAGE_LENGTH, WORKER_TIMEOUT_MS } = CONFIG;
 
@@ -266,6 +267,23 @@ export class SedHandler {
 					isInlined: false,
 					timestamp: Date.now(),
 				});
+			}
+		}
+
+		// Show optimization tip if applicable (max one per chain)
+		if (ctx.from?.id) {
+			const userId = ctx.from.id;
+			for (const commandString of sedCommands.slice(0, MAX_CHAIN_LENGTH)) {
+				const match = commandString.match(SED_PATTERN);
+				if (!match) continue;
+
+				const pattern = match[1].replace(/\\\//g, "/");
+				const tip = getBestTip(pattern, userId);
+
+				if (tip) {
+					await sendTransientTip(ctx, tip);
+					break; // Only show one tip per chain
+				}
 			}
 		}
 	}
