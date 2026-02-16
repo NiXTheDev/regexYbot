@@ -14,7 +14,6 @@ import { SED_PATTERN } from "./utils";
 import { DatabaseService } from "./database";
 import { WorkerPool } from "./workerPool";
 import { parseSedCommands, SedHandler } from "./sed";
-import type { IWorkerPool } from "./types";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { RateLimitError, TelegramAPIError } from "./errors";
@@ -165,7 +164,7 @@ const __filename = fileURLToPath(import.meta.url);
 const workerScriptPath = join(__filename, "..", "hellspawn.ts");
 
 // Initialize WorkerPool with dynamic scaling
-const workerPool: IWorkerPool = new WorkerPool({
+const workerPool = new WorkerPool({
 	maxWorkers: WORKER_POOL_MAX_WORKERS,
 	minWorkers: WORKER_POOL_MIN_WORKERS,
 	initialWorkers: WORKER_POOL_INITIAL_WORKERS,

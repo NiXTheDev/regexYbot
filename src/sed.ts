@@ -1,5 +1,6 @@
 import { Logger } from "./logger";
-import type { SedCommand, TaskMessage, IWorkerPool } from "./types";
+import type { SedCommand, TaskMessage } from "./types";
+import type { WorkerPool } from "./workerPool";
 import {
 	SED_PATTERN,
 	getRegexFlags,
@@ -38,7 +39,7 @@ export function parseSedCommands(text: string): string[] {
 type MyContext = Context & CommandsFlavor;
 
 export interface SedHandlerDependencies {
-	workerPool: IWorkerPool;
+	workerPool: WorkerPool;
 	sendOrEditReply: (
 		ctx: MyContext,
 		targetMsgId: number,

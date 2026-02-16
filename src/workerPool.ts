@@ -1,6 +1,5 @@
 import { Logger } from "./logger";
 import type { TaskMessage, ResultMessage } from "./types";
-import type { IWorkerPool } from "./types";
 import { HealthMonitor, type HealthMetrics } from "./healthMonitor";
 import { WorkerError } from "./errors";
 
@@ -45,7 +44,7 @@ export interface WorkerPoolConfig {
  * - Scales up when queue grows
  * - Scales down idle workers after timeout (smart logic)
  */
-export class WorkerPool implements IWorkerPool {
+export class WorkerPool {
 	private config: WorkerPoolConfig;
 	private workers: Map<Worker, WorkerState> = new Map();
 	/** Central FIFO task queue */
