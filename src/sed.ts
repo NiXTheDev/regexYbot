@@ -9,6 +9,7 @@ import {
 import { CONFIG } from "./config";
 import { RegexError, WorkerError } from "./errors";
 import type { MyContext } from "./i18n";
+import { recordSubstitution } from "./metrics";
 
 const { MAX_CHAIN_LENGTH, MAX_MESSAGE_LENGTH, WORKER_TIMEOUT_MS } = CONFIG;
 
@@ -159,6 +160,10 @@ export class SedHandler {
 				finalMessage += performanceInfo;
 			}
 		}
+
+		// Record successful substitution
+		recordSubstitution();
+
 		await this.deps.sendOrEditReply(
 			ctx,
 			targetMsgId,

@@ -28,6 +28,7 @@ import {
 	isSupportedLanguage,
 } from "./i18n";
 import { explainPattern } from "./explain";
+import { getMetrics, formatHealthStatus, formatMetrics } from "./metrics";
 
 // --- Configuration ---
 const {
@@ -508,6 +509,16 @@ myCommands.command("language", "Change bot language", async (ctx) => {
 
 	// Invalid usage
 	await ctx.reply(ctx.t("command-language-usage"));
+});
+
+myCommands.command("health", "Show bot health status", async (ctx) => {
+	const metrics = getMetrics(workerPool);
+	await ctx.reply(formatHealthStatus(metrics));
+});
+
+myCommands.command("metrics", "Show performance metrics", async (ctx) => {
+	const metrics = getMetrics(workerPool);
+	await ctx.reply(formatMetrics(metrics));
 });
 
 bot.use(myCommands);
