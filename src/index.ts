@@ -509,10 +509,14 @@ bot.use(myCommands);
 bot.on("callback_query:data", async (ctx) => {
 	const data = ctx.callbackQuery.data;
 
-	if (data.startsWith("regexhelp:")) {
-		const parts = data.split(":");
-		const action = parts[1];
+	if (!data.startsWith("regexhelp:")) {
+		return;
+	}
 
+	const parts = data.split(":");
+	const action = parts[1];
+
+	try {
 		if (action === "back") {
 			// Show main help menu
 			await ctx.editMessageText(getMainHelpMessage(), {
@@ -523,26 +527,33 @@ bot.on("callback_query:data", async (ctx) => {
 			// Show category items
 			const categoryKey = parts[2];
 			const helpText = formatCategoryHelp(categoryKey);
-			if (helpText) {
-				await ctx.editMessageText(helpText, {
-					parse_mode: "MarkdownV2",
-					reply_markup: createItemKeyboard(categoryKey),
-				});
+			if (!helpText) {
+				await ctx.answerCallbackQuery("Category not found");
+				return;
 			}
+			await ctx.editMessageText(helpText, {
+				parse_mode: "MarkdownV2",
+				reply_markup: createItemKeyboard(categoryKey),
+			});
 		} else if (action === "item" && parts[2] && parts[3]) {
 			// Show item details
 			const categoryKey = parts[2];
 			const itemKey = parts[3];
 			const helpText = formatItemHelp(categoryKey, itemKey);
-			if (helpText) {
-				await ctx.editMessageText(helpText, {
-					parse_mode: "MarkdownV2",
-					reply_markup: createItemKeyboard(categoryKey),
-				});
+			if (!helpText) {
+				await ctx.answerCallbackQuery("Item not found");
+				return;
 			}
+			await ctx.editMessageText(helpText, {
+				parse_mode: "MarkdownV2",
+				reply_markup: createItemKeyboard(categoryKey),
+			});
 		}
 
 		await ctx.answerCallbackQuery();
+	} catch (error) {
+		logger.error(`RegexHelp callback error: ${error}`);
+		await ctx.answerCallbackQuery("An error occurred");
 	}
 });
 
