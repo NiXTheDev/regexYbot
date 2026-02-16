@@ -440,7 +440,7 @@ myCommands.command("start", "Get a greeting message", async (ctx) => {
 
 myCommands.command("regexhelp", "Get help with regex syntax", async (ctx) => {
 	await ctx.reply(getMainHelpMessage(), {
-		parse_mode: "Markdown",
+		parse_mode: "MarkdownV2",
 		reply_markup: createCategoryKeyboard(),
 	});
 });
@@ -516,7 +516,7 @@ bot.on("callback_query:data", async (ctx) => {
 		if (action === "back") {
 			// Show main help menu
 			await ctx.editMessageText(getMainHelpMessage(), {
-				parse_mode: "Markdown",
+				parse_mode: "MarkdownV2",
 				reply_markup: createCategoryKeyboard(),
 			});
 		} else if (action === "category" && parts[2]) {
@@ -525,7 +525,7 @@ bot.on("callback_query:data", async (ctx) => {
 			const helpText = formatCategoryHelp(categoryKey);
 			if (helpText) {
 				await ctx.editMessageText(helpText, {
-					parse_mode: "Markdown",
+					parse_mode: "MarkdownV2",
 					reply_markup: createItemKeyboard(categoryKey),
 				});
 			}
@@ -536,7 +536,7 @@ bot.on("callback_query:data", async (ctx) => {
 			const helpText = formatItemHelp(categoryKey, itemKey);
 			if (helpText) {
 				await ctx.editMessageText(helpText, {
-					parse_mode: "Markdown",
+					parse_mode: "MarkdownV2",
 					reply_markup: createItemKeyboard(categoryKey),
 				});
 			}

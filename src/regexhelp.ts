@@ -5,6 +5,7 @@
  */
 
 import { InlineKeyboard } from "grammy";
+import { escapeForMarkdownV2AndBackslashes } from "./utils";
 
 export interface RegexHelpItem {
 	name: string;
@@ -298,10 +299,17 @@ export function formatItemHelp(
 	const item = category.items[itemKey];
 	if (!item) return null;
 
-	let message = `**${item.name}**\n\n`;
-	message += `${item.description}\n\n`;
-	if (item.example) {
-		message += `Example: ${item.example}`;
+	// Escape special characters for MarkdownV2
+	const name = escapeForMarkdownV2AndBackslashes(item.name);
+	const description = escapeForMarkdownV2AndBackslashes(item.description);
+	const example = item.example
+		? escapeForMarkdownV2AndBackslashes(item.example)
+		: null;
+
+	let message = `*${name}*\n\n`;
+	message += `${description}\n\n`;
+	if (example) {
+		message += `Example: ${example}`;
 	}
 
 	return message;
@@ -314,12 +322,18 @@ export function formatCategoryHelp(categoryKey: string): string | null {
 	const category = regexHelpData[categoryKey];
 	if (!category) return null;
 
-	let message = `**${category.name}**\n\n`;
-	message += `${category.description}\n\n`;
+	// Escape special characters for MarkdownV2
+	const name = escapeForMarkdownV2AndBackslashes(category.name);
+	const description = escapeForMarkdownV2AndBackslashes(category.description);
+
+	let message = `*${name}*\n\n`;
+	message += `${description}\n\n`;
 	message += `Available items:\n`;
 
 	for (const item of Object.values(category.items)) {
-		message += `- ${item.name}: ${item.description}\n`;
+		const itemName = escapeForMarkdownV2AndBackslashes(item.name);
+		const itemDesc = escapeForMarkdownV2AndBackslashes(item.description);
+		message += `• ${itemName}: ${itemDesc}\n`;
 	}
 
 	return message;
@@ -329,11 +343,16 @@ export function formatCategoryHelp(categoryKey: string): string | null {
  * Get main help message
  */
 export function getMainHelpMessage(): string {
-	return (
-		"**Regex Help**\n\n" +
-		"Select a category to learn about regex syntax:\n\n" +
-		Object.values(regexHelpData)
-			.map((cat) => `- **${cat.name}**: ${cat.description}`)
-			.join("\n")
-	);
+	const lines = [
+		`*Regex Help*\n`,
+		`Select a category to learn about regex syntax:\n`,
+	];
+
+	for (const cat of Object.values(regexHelpData)) {
+		const name = escapeForMarkdownV2AndBackslashes(cat.name);
+		const desc = escapeForMarkdownV2AndBackslashes(cat.description);
+		lines.push(`• *${name}*: ${desc}`);
+	}
+
+	return lines.join("\n");
 }
