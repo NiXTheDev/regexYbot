@@ -7,9 +7,8 @@ import {
 	escapeForMarkdownV2AndBackslashes,
 } from "./utils";
 import { CONFIG } from "./config";
-import type { Context } from "grammy";
-import type { CommandsFlavor } from "@grammyjs/commands";
 import { RegexError, WorkerError } from "./errors";
+import type { MyContext } from "./i18n";
 
 const { MAX_CHAIN_LENGTH, MAX_MESSAGE_LENGTH, WORKER_TIMEOUT_MS } = CONFIG;
 
@@ -35,8 +34,6 @@ export function parseSedCommands(text: string): string[] {
 
 	return commands;
 }
-
-type MyContext = Context & CommandsFlavor;
 
 export interface SedHandlerDependencies {
 	workerPool: WorkerPool;

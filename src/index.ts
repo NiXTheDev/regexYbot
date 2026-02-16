@@ -1,12 +1,8 @@
-import {
-	CommandGroup,
-	commands,
-	type CommandsFlavor,
-} from "@grammyjs/commands";
+import { CommandGroup, commands } from "@grammyjs/commands";
 import { run } from "@grammyjs/runner";
 import { SQL } from "bun";
 import { writeFileSync } from "node:fs";
-import { Bot, Context, GrammyError } from "grammy";
+import { Bot, GrammyError, session } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { CONFIG } from "./config";
 import { Logger, withCorrelation } from "./logger";
@@ -16,7 +12,7 @@ import { WorkerPool } from "./workerPool";
 import { parseSedCommands, SedHandler } from "./sed";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { RateLimitError, TelegramAPIError } from "./errors";
+import { TelegramAPIError } from "./errors";
 import {
 	createCategoryKeyboard,
 	createItemKeyboard,
@@ -24,6 +20,13 @@ import {
 	formatCategoryHelp,
 	getMainHelpMessage,
 } from "./regexhelp";
+import {
+	i18n,
+	MyContext,
+	getLanguageInfo,
+	formatLanguageList,
+	isSupportedLanguage,
+} from "./i18n";
 
 // --- Configuration ---
 const {
@@ -44,9 +47,6 @@ const {
 	RATE_LIMIT_COMMANDS_PER_MINUTE,
 } = CONFIG;
 
-// --- Type Definitions ---
-type MyContext = Context & CommandsFlavor;
-
 // --- Bot Initialization ---
 const logger = new Logger("Main");
 logger.info("Initializing bot...");
@@ -61,6 +61,14 @@ bot.api.config.use(
 );
 
 bot.use(commands());
+
+// --- Session & i18n Setup ---
+bot.use(
+	session({
+		initial: () => ({}),
+	}),
+);
+bot.use(i18n);
 
 // --- Rate Limiting ---
 if (RATE_LIMIT_ENABLED) {
@@ -193,9 +201,8 @@ if (RATE_LIMIT_ENABLED) {
 		// Check if this would exceed limit
 		if (userData.count + cost > RATE_LIMIT_COMMANDS_PER_MINUTE) {
 			const remaining = Math.ceil((userData.resetTime - now) / 1000);
-			const error = new RateLimitError(userId, remaining * 1000);
-			logger.debug(error.message);
-			await ctx.reply(error.getUserMessage());
+			logger.debug(`User ${userId} rate limited. Retry after ${remaining}s`);
+			await ctx.reply(ctx.t("errors.rateLimit", { seconds: remaining }));
 			return; // Don't process the command
 		}
 
@@ -425,22 +432,10 @@ async function handleTextMessage(
 // --- Command Group ---
 const myCommands = new CommandGroup<MyContext>();
 myCommands.command("privacy", "Show privacy information", async (ctx) => {
-	await ctx.reply(
-		"This bot does not collect or process any user data, apart from a short " +
-			"backlog of messages to perform regex substitutions on. These are " +
-			"stored in an in-memory sql db for 48h, and can not be accessed by the bot's " +
-			"administrator in any way.",
-	);
+	await ctx.reply(ctx.t("commands.privacy"));
 });
 myCommands.command("start", "Get a greeting message", async (ctx) => {
-	await ctx.reply(
-		"Hello! I am a regex bot. Use s/find/replace/flags to substitute text in messages. " +
-			"The replacement text can span multiple lines or use escape sequences like `\\n`. " +
-			"You can also chain multiple commands, one per line.\n\n" +
-			"Special flags:\n" +
-			"- `p`: Show performance timing for the entire command chain (e.g., `s/pattern/repl/p`)\n" +
-			"Use `\\N` in replacements for captured groups (e.g., `\\1`).",
-	);
+	await ctx.reply(ctx.t("commands.start"), { parse_mode: "Markdown" });
 });
 
 myCommands.command("regexhelp", "Get help with regex syntax", async (ctx) => {
@@ -448,6 +443,64 @@ myCommands.command("regexhelp", "Get help with regex syntax", async (ctx) => {
 		parse_mode: "Markdown",
 		reply_markup: createCategoryKeyboard(),
 	});
+});
+
+myCommands.command("language", "Change bot language", async (ctx) => {
+	const args = ctx.match.trim().split(/\s+/);
+	const subcommand = args[0]?.toLowerCase();
+
+	if (!subcommand || subcommand === "") {
+		// Show current language
+		const currentLang = await ctx.i18n.getLocale();
+		const langInfo = getLanguageInfo(currentLang);
+		await ctx.reply(
+			ctx.t("command-language-current", {
+				language: langInfo?.nativeName || currentLang,
+			}),
+		);
+		return;
+	}
+
+	if (subcommand === "list") {
+		// Show available languages
+		await ctx.reply(
+			ctx.t("command-language-list", {
+				languages: formatLanguageList(),
+			}),
+		);
+		return;
+	}
+
+	if (subcommand === "set" && args[1]) {
+		const langCode = args[1].toLowerCase();
+		if (!isSupportedLanguage(langCode)) {
+			await ctx.reply(ctx.t("command-language-setError"));
+			return;
+		}
+
+		const currentLang = await ctx.i18n.getLocale();
+		if (currentLang === langCode) {
+			const langInfo = getLanguageInfo(langCode);
+			await ctx.reply(
+				ctx.t("command-language-current", {
+					language: langInfo?.nativeName || langCode,
+				}),
+			);
+			return;
+		}
+
+		await ctx.i18n.setLocale(langCode);
+		const langInfo = getLanguageInfo(langCode);
+		await ctx.reply(
+			ctx.t("command-language-setSuccess", {
+				language: langInfo?.nativeName || langCode,
+			}),
+		);
+		return;
+	}
+
+	// Invalid usage
+	await ctx.reply(ctx.t("command-language-usage"));
 });
 
 bot.use(myCommands);
