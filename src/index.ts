@@ -27,6 +27,7 @@ import {
 	formatLanguageList,
 	isSupportedLanguage,
 } from "./i18n";
+import { explainPattern } from "./explain";
 
 // --- Configuration ---
 const {
@@ -443,6 +444,12 @@ myCommands.command("regexhelp", "Get help with regex syntax", async (ctx) => {
 		parse_mode: "MarkdownV2",
 		reply_markup: createCategoryKeyboard(),
 	});
+});
+
+myCommands.command("explain", "Explain a regex pattern", async (ctx) => {
+	const pattern = ctx.match.trim();
+	const explanation = explainPattern(pattern);
+	await ctx.reply(explanation, { parse_mode: "MarkdownV2" });
 });
 
 myCommands.command("language", "Change bot language", async (ctx) => {
