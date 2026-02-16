@@ -19,7 +19,34 @@ A fast, efficient, and feature-rich Telegram bot built with [grammY](https://git
 - **Error Resilience:** Handles Telegram API errors gracefully (e.g., "message is not modified", flood control) and avoids resending identical messages unnecessarily.
 - **Custom Error Hierarchy:** Granular error types with user-friendly messages (RegexError, RateLimitError, WorkerError, etc.).
 - **Circuit Breaker Pattern:** Prevents cascading failures by stopping requests to failing services.
+- **Multi-Language Support:** Full i18n with 11 languages including English, German, Spanish, Italian, Polish, Swedish, Russian, Ukrainian, Japanese, Korean, and Chinese (Simplified).
 - **Grouping Support:** Fully supports regex capture groups (`(\w+)`) and referencing them in the replacement string using `$1`(modern way), or `\1`(old regexbot, legacy way), with support for mixed syntax
+
+## Internationalization (i18n)
+
+regexYbot supports multiple languages with automatic detection based on Telegram user settings:
+
+**Supported Languages:**
+
+- 🇺🇸 English (default)
+- 🇩🇪 German (Deutsch)
+- 🇪🇸 Spanish (Español)
+- 🇮🇹 Italian (Italiano)
+- 🇵🇱 Polish (Polski)
+- 🇸🇪 Swedish (Svenska)
+- 🇷🇺 Russian (Русский)
+- 🇺🇦 Ukrainian (Українська)
+- 🇯🇵 Japanese (日本語)
+- 🇰🇷 Korean (한국어)
+- 🇨🇳 Chinese Simplified (简体中文)
+
+**Language Commands:**
+
+- `/language` - Show your current language
+- `/language list` - List all available languages
+- `/language set <code>` - Change language (e.g., `/language set de`)
+
+The bot automatically detects your language from Telegram settings. If your language isn't supported, it falls back to English. Translations are stored in the `locales/` directory using the [Fluent](https://projectfluent.org/) format. Contributions for new languages or improvements are welcome!
 
 ## Commands
 
