@@ -17,6 +17,13 @@ import { parseSedCommands, SedHandler } from "./sed";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { RateLimitError, TelegramAPIError } from "./errors";
+import {
+	createCategoryKeyboard,
+	createItemKeyboard,
+	formatItemHelp,
+	formatCategoryHelp,
+	getMainHelpMessage,
+} from "./regexhelp";
 
 // --- Configuration ---
 const {
@@ -435,7 +442,56 @@ myCommands.command("start", "Get a greeting message", async (ctx) => {
 			"Use `\\N` in replacements for captured groups (e.g., `\\1`).",
 	);
 });
+
+myCommands.command("regexhelp", "Get help with regex syntax", async (ctx) => {
+	await ctx.reply(getMainHelpMessage(), {
+		parse_mode: "Markdown",
+		reply_markup: createCategoryKeyboard(),
+	});
+});
+
 bot.use(myCommands);
+
+// --- Callback Query Handler for Regex Help ---
+bot.on("callback_query:data", async (ctx) => {
+	const data = ctx.callbackQuery.data;
+
+	if (data.startsWith("regexhelp:")) {
+		const parts = data.split(":");
+		const action = parts[1];
+
+		if (action === "back") {
+			// Show main help menu
+			await ctx.editMessageText(getMainHelpMessage(), {
+				parse_mode: "Markdown",
+				reply_markup: createCategoryKeyboard(),
+			});
+		} else if (action === "category" && parts[2]) {
+			// Show category items
+			const categoryKey = parts[2];
+			const helpText = formatCategoryHelp(categoryKey);
+			if (helpText) {
+				await ctx.editMessageText(helpText, {
+					parse_mode: "Markdown",
+					reply_markup: createItemKeyboard(categoryKey),
+				});
+			}
+		} else if (action === "item" && parts[2] && parts[3]) {
+			// Show item details
+			const categoryKey = parts[2];
+			const itemKey = parts[3];
+			const helpText = formatItemHelp(categoryKey, itemKey);
+			if (helpText) {
+				await ctx.editMessageText(helpText, {
+					parse_mode: "Markdown",
+					reply_markup: createItemKeyboard(categoryKey),
+				});
+			}
+		}
+
+		await ctx.answerCallbackQuery();
+	}
+});
 
 // --- Bot Handlers ---
 bot.on("message", async (ctx) => {
