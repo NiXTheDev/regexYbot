@@ -92,7 +92,42 @@ Configure the bot's behavior with the following environment variables:
 | `LIVENESS_FILE`                      |    No    | Path to the liveness file when healthcheck is enabled.                                                    | `/tmp/bot-alive`                             |
 | `LIVENESS_INTERVAL_MS`               |    No    | How often to update the liveness file (milliseconds).                                                     | 30000                                        |
 
-## Setup & Run
+## Quick Start (Binary)
+
+Pre-built binaries are available for Linux and Windows:
+
+1. **Download** the latest release from [GitHub Releases](https://github.com/NiXTheDev/regexYbot/releases)
+   - Linux: `regexybot-linux-x64.tar.gz`
+   - Windows: `regexybot-windows-x64.zip`
+
+2. **Extract** the binary:
+
+   ```bash
+   # Linux
+   tar -xzf regexybot-linux-x64.tar.gz
+
+   # Windows (PowerShell)
+   Expand-Archive regexybot-windows-x64.zip
+   ```
+
+3. **Run** with your bot token:
+
+   ```bash
+   # Linux/macOS
+   TOKEN=your_telegram_bot_token ./regexybot-linux-x64
+
+   # Windows (Command Prompt)
+   set TOKEN=your_telegram_bot_token
+   regexybot-windows-x64.exe
+
+   # Windows (PowerShell)
+   $env:TOKEN="your_telegram_bot_token"
+   .\regexybot-windows-x64.exe
+   ```
+
+> **Note:** Binaries are self-contained and don't require Bun or Node.js to be installed.
+
+## Setup & Run (From Source)
 
 1.  Ensure you have [Bun](https://bun.sh/) installed.
 2.  Clone this repository.

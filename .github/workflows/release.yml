@@ -7,8 +7,62 @@ on:
       - release
 
 jobs:
+  build-binaries:
+    # Build binaries first
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+            output: regexybot-linux-x64
+          - os: windows-latest
+            target: windows-x64
+            output: regexybot-windows-x64.exe
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      
+      - name: Install dependencies
+        run: bun install
+      
+      - name: Build binary (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          bun build --compile --target=bun-linux-x64 ./index.ts --outfile ${{ matrix.output }}
+          chmod +x ${{ matrix.output }}
+          tar -czf ${{ matrix.output }}.tar.gz ${{ matrix.output }}
+      
+      - name: Build binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          bun build --compile --target=bun-windows-x64 ./index.ts --outfile ${{ matrix.output }}
+          Compress-Archive -Path ${{ matrix.output }} -DestinationPath ${{ matrix.output }}.zip
+      
+      - name: Upload binary artifact (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.output }}
+          path: ${{ matrix.output }}.tar.gz
+      
+      - name: Upload binary artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.output }}
+          path: ${{ matrix.output }}.zip
+
   create-release:
     # Only run if PR was merged and has 'release' label
+    needs: build-binaries
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release')
     runs-on: ubuntu-latest
     permissions:
@@ -53,16 +107,46 @@ jobs:
         id: extract_changelog
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
-          # Extract the section for this version from CHANGELOG.md
-          # Look for patterns like [0.1.9] or [0.1.9] - 2026-02-15
           CHANGELOG_SECTION=$(sed -n "/^<summary><b>\[$VERSION\]/,/^<\/details>/p" CHANGELOG.md | sed 's/<details[^>]*>//g; s/<\/details>//g; s/<summary>//g; s/<\/summary>//g')
           
           if [ -z "$CHANGELOG_SECTION" ]; then
             CHANGELOG_SECTION="See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for full release notes."
           fi
           
-          # Write to file to preserve newlines
           echo "$CHANGELOG_SECTION" > /tmp/release_notes.md
+          
+          echo "" >> /tmp/release_notes.md
+          echo "## Binary Downloads" >> /tmp/release_notes.md
+          echo "" >> /tmp/release_notes.md
+          echo "- **Linux (x64)**: Download \`regexybot-linux-x64.tar.gz\` below" >> /tmp/release_notes.md
+          echo "- **Windows (x64)**: Download \`regexybot-windows-x64.zip\` below" >> /tmp/release_notes.md
+          echo "" >> /tmp/release_notes.md
+          echo "### Binary Installation" >> /tmp/release_notes.md
+          echo "" >> /tmp/release_notes.md
+          echo "**Linux:**" >> /tmp/release_notes.md
+          echo '```bash' >> /tmp/release_notes.md
+          echo "tar -xzf regexybot-linux-x64.tar.gz" >> /tmp/release_notes.md
+          echo "TOKEN=your_token_here ./regexybot-linux-x64" >> /tmp/release_notes.md
+          echo '```' >> /tmp/release_notes.md
+          echo "" >> /tmp/release_notes.md
+          echo "**Windows:**" >> /tmp/release_notes.md
+          echo '```powershell' >> /tmp/release_notes.md
+          echo "Expand-Archive regexybot-windows-x64.zip" >> /tmp/release_notes.md
+          echo "set TOKEN=your_token_here" >> /tmp/release_notes.md
+          echo ".\regexybot-windows-x64.exe" >> /tmp/release_notes.md
+          echo '```' >> /tmp/release_notes.md
+      
+      - name: Download Linux binary
+        uses: actions/download-artifact@v4
+        with:
+          name: regexybot-linux-x64
+          path: ./binaries/
+      
+      - name: Download Windows binary
+        uses: actions/download-artifact@v4
+        with:
+          name: regexybot-windows-x64
+          path: ./binaries/
       
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -73,6 +157,9 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: false
+          files: |
+            ./binaries/*.tar.gz
+            ./binaries/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
@@ -84,5 +171,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `🎉 Release **${{ steps.get_version.outputs.tag }}** has been created!\n\n📦 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.tag }}`
+              body: `🎉 Release **${{ steps.get_version.outputs.tag }}** has been created!\n\n📦 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.tag }}\n\n📥 Binaries available for Linux (x64) and Windows (x64)`
             })
