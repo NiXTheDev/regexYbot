@@ -1,12 +1,8 @@
-import {
-	CommandGroup,
-	commands,
-	type CommandsFlavor,
-} from "@grammyjs/commands";
+import { CommandGroup, commands } from "@grammyjs/commands";
 import { run } from "@grammyjs/runner";
 import { SQL } from "bun";
 import { writeFileSync } from "node:fs";
-import { Bot, Context, GrammyError } from "grammy";
+import { Bot, GrammyError, session } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { CONFIG } from "./config";
 import { Logger, withCorrelation } from "./logger";
@@ -14,19 +10,31 @@ import { SED_PATTERN } from "./utils";
 import { DatabaseService } from "./database";
 import { WorkerPool } from "./workerPool";
 import { parseSedCommands, SedHandler } from "./sed";
-import { WorkerPoolV2 } from "./workerPoolV2";
-import type { IWorkerPool } from "./workerPoolInterface";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { RateLimitError, TelegramAPIError } from "./errors";
+import { TelegramAPIError } from "./errors";
+import {
+	createCategoryKeyboard,
+	createItemKeyboard,
+	formatItemHelp,
+	formatCategoryHelp,
+	getMainHelpMessage,
+} from "./regexhelp";
+import {
+	i18n,
+	MyContext,
+	getLanguageInfo,
+	formatLanguageList,
+	isSupportedLanguage,
+} from "./i18n";
+import { explainPattern } from "./explain";
+import { getMetrics, formatHealthStatus, formatMetrics } from "./metrics";
 
 // --- Configuration ---
 const {
 	TOKEN,
 	BASE_URL,
-	WORKER_POOL_SIZE,
 	WORKER_TIMEOUT_MS,
-	WORKER_POOL_V2_ENABLED,
 	WORKER_POOL_MIN_WORKERS,
 	WORKER_POOL_MAX_WORKERS,
 	WORKER_POOL_INITIAL_WORKERS,
@@ -40,9 +48,6 @@ const {
 	RATE_LIMIT_ENABLED,
 	RATE_LIMIT_COMMANDS_PER_MINUTE,
 } = CONFIG;
-
-// --- Type Definitions ---
-type MyContext = Context & CommandsFlavor;
 
 // --- Bot Initialization ---
 const logger = new Logger("Main");
@@ -59,6 +64,14 @@ bot.api.config.use(
 
 bot.use(commands());
 
+// --- Session & i18n Setup ---
+bot.use(
+	session({
+		initial: () => ({}),
+	}),
+);
+bot.use(i18n);
+
 // --- Rate Limiting ---
 if (RATE_LIMIT_ENABLED) {
 	logger.info(
@@ -71,19 +84,39 @@ if (RATE_LIMIT_ENABLED) {
 		{ count: number; resetTime: number }
 	>();
 
-	bot.use(async (ctx, next) => {
-		// Skip rate limiting for edited messages (they're corrections, not new spam)
-		if (ctx.editedMessage) {
-			return next();
-		}
+	// Store edit history per user for abuse detection
+	interface EditRecord {
+		timestamp: number;
+		charChangeCount: number;
+		hadError: boolean;
+	}
+	const userEditHistory = new Map<number, EditRecord[]>();
 
+	// Clean old edit records periodically (every 5 minutes)
+	setInterval(() => {
+		const now = Date.now();
+		for (const [userId, edits] of userEditHistory) {
+			const recentEdits = edits.filter((e) => now - e.timestamp < 60000);
+			if (recentEdits.length === 0) {
+				userEditHistory.delete(userId);
+			} else {
+				userEditHistory.set(userId, recentEdits);
+			}
+		}
+	}, 300000);
+
+	bot.use(async (ctx, next) => {
 		const userId = ctx.from?.id;
 		if (!userId) {
 			return next();
 		}
 
 		// Parse text for sed commands
-		const text = ctx.message?.text || ctx.message?.caption;
+		const text =
+			ctx.message?.text ||
+			ctx.message?.caption ||
+			ctx.editedMessage?.text ||
+			ctx.editedMessage?.caption;
 		if (!text) {
 			return next();
 		}
@@ -95,33 +128,114 @@ if (RATE_LIMIT_ENABLED) {
 			return next();
 		}
 
-		// Check rate limit
+		const isEdit = !!ctx.editedMessage;
 		const now = Date.now();
-		let userData = userCommandCounts.get(userId);
 
+		// Get or initialize user data
+		let userData = userCommandCounts.get(userId);
 		if (!userData || now > userData.resetTime) {
-			// Reset or initialize
 			userData = { count: 0, resetTime: now + 60000 };
 			userCommandCounts.set(userId, userData);
 		}
 
+		// Calculate rate limit cost
+		let cost: number;
+
+		if (!isEdit) {
+			// Regular message: full cost per command
+			cost = commands.length;
+		} else {
+			// Edit: calculate with enhanced logic
+			const editHistory = userEditHistory.get(userId) || [];
+
+			// Calculate character change count (approximate)
+			// For edits, we don't have the original, so we use a heuristic
+			// Small edits are < 10 characters changed
+			const charChangeCount = text.length; // Simplified - assume all text is "changed"
+			const isSmallChange = charChangeCount < 10;
+
+			// Count small edits in last minute for abuse detection
+			const recentSmallEdits = editHistory.filter(
+				(e) => e.timestamp > now - 60000 && e.charChangeCount < 10,
+			);
+			const isAbusingSmallEdits = recentSmallEdits.length >= 5;
+
+			// Get last edit to check for error penalty
+			const lastEdit =
+				editHistory.length > 0 ? editHistory[editHistory.length - 1] : null;
+			const previousHadError = lastEdit?.hadError ?? false;
+
+			// Calculate cost
+			if (isAbusingSmallEdits) {
+				// Abuse detected: apply retroactive full penalties
+				cost = commands.length; // Full cost instead of 0.5
+				logger.debug(
+					`Rate limit abuse detected for user ${userId}: ${recentSmallEdits.length} small edits`,
+				);
+			} else if (isSmallChange) {
+				// Small change: minimal cost (0.25 per command)
+				cost = commands.length * 0.25;
+			} else {
+				// Normal edit: half cost (0.5 per command)
+				cost = commands.length * 0.5;
+			}
+
+			// Add error penalty if previous edit had error
+			if (previousHadError) {
+				cost += 0.5;
+				logger.debug(`Rate limit error penalty applied for user ${userId}`);
+			}
+
+			// Record this edit
+			const editRecord: EditRecord = {
+				timestamp: now,
+				charChangeCount,
+				hadError: false, // Will be updated after processing
+			};
+			editHistory.push(editRecord);
+			userEditHistory.set(userId, editHistory);
+
+			// Store record index for later error update
+			(ctx as typeof ctx & { __editRecordIndex?: number }).__editRecordIndex =
+				editHistory.length - 1;
+		}
+
 		// Check if this would exceed limit
-		if (userData.count + commands.length > RATE_LIMIT_COMMANDS_PER_MINUTE) {
+		if (userData.count + cost > RATE_LIMIT_COMMANDS_PER_MINUTE) {
 			const remaining = Math.ceil((userData.resetTime - now) / 1000);
-			const error = new RateLimitError(userId, remaining * 1000);
-			logger.debug(error.message);
-			await ctx.reply(error.getUserMessage());
+			logger.debug(`User ${userId} rate limited. Retry after ${remaining}s`);
+			await ctx.reply(ctx.t("errors.rateLimit", { seconds: remaining }));
 			return; // Don't process the command
 		}
 
 		// Process the command
-		const result = await next();
+		let hadError = false;
+		try {
+			const result = await next();
+			return result;
+		} catch (error) {
+			hadError = true;
+			throw error;
+		} finally {
+			// Update edit record with error status
+			if (isEdit) {
+				const editHistory = userEditHistory.get(userId);
+				const recordIndex = (ctx as typeof ctx & { __editRecordIndex?: number })
+					.__editRecordIndex;
+				if (
+					editHistory &&
+					recordIndex !== undefined &&
+					editHistory[recordIndex]
+				) {
+					editHistory[recordIndex].hadError = hadError;
+				}
+			}
 
-		// Only count successful commands (no error thrown)
-		// If we get here, the command succeeded
-		userData.count += commands.length;
-
-		return result;
+			// Only count successful commands (unless it was an edit abuse case)
+			if (!hadError || (isEdit && cost >= commands.length)) {
+				userData.count += cost;
+			}
+		}
 	});
 }
 
@@ -167,22 +281,18 @@ const dbService = new DatabaseService(db);
 const __filename = fileURLToPath(import.meta.url);
 const workerScriptPath = join(__filename, "..", "hellspawn.ts");
 
-// Use WorkerPoolV2 if enabled, otherwise use legacy WorkerPool
-const workerPool: IWorkerPool = WORKER_POOL_V2_ENABLED
-	? new WorkerPoolV2({
-			maxWorkers: WORKER_POOL_MAX_WORKERS,
-			minWorkers: WORKER_POOL_MIN_WORKERS,
-			initialWorkers: WORKER_POOL_INITIAL_WORKERS,
-			taskTimeoutMs: WORKER_TIMEOUT_MS,
-			idleTimeoutMs: WORKER_POOL_IDLE_TIMEOUT_MS,
-			idleCheckIntervalMs: WORKER_POOL_IDLE_CHECK_INTERVAL_MS,
-			workerScript: workerScriptPath,
-		})
-	: new WorkerPool(WORKER_POOL_SIZE, workerScriptPath);
+// Initialize WorkerPool with dynamic scaling
+const workerPool = new WorkerPool({
+	maxWorkers: WORKER_POOL_MAX_WORKERS,
+	minWorkers: WORKER_POOL_MIN_WORKERS,
+	initialWorkers: WORKER_POOL_INITIAL_WORKERS,
+	taskTimeoutMs: WORKER_TIMEOUT_MS,
+	idleTimeoutMs: WORKER_POOL_IDLE_TIMEOUT_MS,
+	idleCheckIntervalMs: WORKER_POOL_IDLE_CHECK_INTERVAL_MS,
+	workerScript: workerScriptPath,
+});
 
-if (WORKER_POOL_V2_ENABLED) {
-	logger.info("Using WorkerPoolV2 with dynamic scaling");
-}
+logger.info("Using WorkerPool with dynamic scaling");
 
 // --- Sed Handler Setup ---
 async function sendOrEditReply(
@@ -324,24 +434,146 @@ async function handleTextMessage(
 // --- Command Group ---
 const myCommands = new CommandGroup<MyContext>();
 myCommands.command("privacy", "Show privacy information", async (ctx) => {
-	await ctx.reply(
-		"This bot does not collect or process any user data, apart from a short " +
-			"backlog of messages to perform regex substitutions on. These are " +
-			"stored in an in-memory sql db for 48h, and can not be accessed by the bot's " +
-			"administrator in any way.",
-	);
+	await ctx.reply(ctx.t("commands.privacy"));
 });
 myCommands.command("start", "Get a greeting message", async (ctx) => {
-	await ctx.reply(
-		"Hello! I am a regex bot. Use s/find/replace/flags to substitute text in messages. " +
-			"The replacement text can span multiple lines or use escape sequences like `\\n`. " +
-			"You can also chain multiple commands, one per line.\n\n" +
-			"Special flags:\n" +
-			"- `p`: Show performance timing for the entire command chain (e.g., `s/pattern/repl/p`)\n" +
-			"Use `\\N` in replacements for captured groups (e.g., `\\1`).",
-	);
+	await ctx.reply(ctx.t("commands.start"), { parse_mode: "Markdown" });
 });
+
+myCommands.command("regexhelp", "Get help with regex syntax", async (ctx) => {
+	await ctx.reply(getMainHelpMessage(), {
+		parse_mode: "MarkdownV2",
+		reply_markup: createCategoryKeyboard(),
+	});
+});
+
+myCommands.command("explain", "Explain a regex pattern", async (ctx) => {
+	const pattern = ctx.match.trim();
+	const explanation = explainPattern(pattern);
+	await ctx.reply(explanation, { parse_mode: "MarkdownV2" });
+});
+
+myCommands.command("language", "Change bot language", async (ctx) => {
+	const args = ctx.match.trim().split(/\s+/);
+	const subcommand = args[0]?.toLowerCase();
+
+	if (!subcommand || subcommand === "") {
+		// Show current language
+		const currentLang = await ctx.i18n.getLocale();
+		const langInfo = getLanguageInfo(currentLang);
+		await ctx.reply(
+			ctx.t("command-language-current", {
+				language: langInfo?.nativeName || currentLang,
+			}),
+		);
+		return;
+	}
+
+	if (subcommand === "list") {
+		// Show available languages
+		await ctx.reply(
+			ctx.t("command-language-list", {
+				languages: formatLanguageList(),
+			}),
+		);
+		return;
+	}
+
+	if (subcommand === "set" && args[1]) {
+		const langCode = args[1].toLowerCase();
+		if (!isSupportedLanguage(langCode)) {
+			await ctx.reply(ctx.t("command-language-setError"));
+			return;
+		}
+
+		const currentLang = await ctx.i18n.getLocale();
+		if (currentLang === langCode) {
+			const langInfo = getLanguageInfo(langCode);
+			await ctx.reply(
+				ctx.t("command-language-current", {
+					language: langInfo?.nativeName || langCode,
+				}),
+			);
+			return;
+		}
+
+		await ctx.i18n.setLocale(langCode);
+		const langInfo = getLanguageInfo(langCode);
+		await ctx.reply(
+			ctx.t("command-language-setSuccess", {
+				language: langInfo?.nativeName || langCode,
+			}),
+		);
+		return;
+	}
+
+	// Invalid usage
+	await ctx.reply(ctx.t("command-language-usage"));
+});
+
+myCommands.command("health", "Show bot health status", async (ctx) => {
+	const metrics = getMetrics(workerPool);
+	await ctx.reply(formatHealthStatus(metrics));
+});
+
+myCommands.command("metrics", "Show performance metrics", async (ctx) => {
+	const metrics = getMetrics(workerPool);
+	await ctx.reply(formatMetrics(metrics));
+});
+
 bot.use(myCommands);
+
+// --- Callback Query Handler for Regex Help ---
+bot.on("callback_query:data", async (ctx) => {
+	const data = ctx.callbackQuery.data;
+
+	if (!data.startsWith("regexhelp:")) {
+		return;
+	}
+
+	const parts = data.split(":");
+	const action = parts[1];
+
+	try {
+		if (action === "back") {
+			// Show main help menu
+			await ctx.editMessageText(getMainHelpMessage(), {
+				parse_mode: "MarkdownV2",
+				reply_markup: createCategoryKeyboard(),
+			});
+		} else if (action === "category" && parts[2]) {
+			// Show category items
+			const categoryKey = parts[2];
+			const helpText = formatCategoryHelp(categoryKey);
+			if (!helpText) {
+				await ctx.answerCallbackQuery("Category not found");
+				return;
+			}
+			await ctx.editMessageText(helpText, {
+				parse_mode: "MarkdownV2",
+				reply_markup: createItemKeyboard(categoryKey),
+			});
+		} else if (action === "item" && parts[2] && parts[3]) {
+			// Show item details
+			const categoryKey = parts[2];
+			const itemKey = parts[3];
+			const helpText = formatItemHelp(categoryKey, itemKey);
+			if (!helpText) {
+				await ctx.answerCallbackQuery("Item not found");
+				return;
+			}
+			await ctx.editMessageText(helpText, {
+				parse_mode: "MarkdownV2",
+				reply_markup: createItemKeyboard(categoryKey),
+			});
+		}
+
+		await ctx.answerCallbackQuery();
+	} catch (error) {
+		logger.error(`RegexHelp callback error: ${error}`);
+		await ctx.answerCallbackQuery("An error occurred");
+	}
+});
 
 // --- Bot Handlers ---
 bot.on("message", async (ctx) => {

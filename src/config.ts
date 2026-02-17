@@ -32,12 +32,8 @@ export interface BotConfig {
 	readonly LOG_TEMPLATE: string;
 	readonly NODE_ENV: "development" | "production" | "test";
 
-	// Worker Pool
-	readonly WORKER_POOL_SIZE: number;
+	// Worker Pool (Dynamic Scaling)
 	readonly WORKER_TIMEOUT_MS: number;
-
-	// Worker Pool V2 (Dynamic Scaling)
-	readonly WORKER_POOL_V2_ENABLED: boolean;
 	readonly WORKER_POOL_MIN_WORKERS: number;
 	readonly WORKER_POOL_MAX_WORKERS: number;
 	readonly WORKER_POOL_INITIAL_WORKERS: number;
@@ -207,17 +203,13 @@ function loadConfig(): BotConfig {
 		),
 		NODE_ENV: nodeEnv,
 
-		// Worker Pool
-		WORKER_POOL_SIZE: parseIntEnv("WORKER_POOL_SIZE", 4, 1),
+		// Worker Pool (Dynamic Scaling)
 		WORKER_TIMEOUT_MS: parseIntEnv(
 			"WORKER_TIMEOUT_MS",
 			60 * 1000,
 			1000,
 			300 * 1000,
 		),
-
-		// Worker Pool V2 (Dynamic Scaling)
-		WORKER_POOL_V2_ENABLED: parseBoolEnv("WORKER_POOL_V2_ENABLED", false),
 		WORKER_POOL_MIN_WORKERS: parseIntEnv("WORKER_POOL_MIN_WORKERS", 0, 0),
 		WORKER_POOL_MAX_WORKERS: parseIntEnv("WORKER_POOL_MAX_WORKERS", 8, 1, 32),
 		WORKER_POOL_INITIAL_WORKERS: parseIntEnv(

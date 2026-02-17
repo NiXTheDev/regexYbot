@@ -1,17 +1,71 @@
 import { Logger } from "./logger";
 import type { SedCommand, TaskMessage } from "./types";
+import type { WorkerPool } from "./workerPool";
 import {
 	SED_PATTERN,
 	getRegexFlags,
 	escapeForMarkdownV2AndBackslashes,
 } from "./utils";
 import { CONFIG } from "./config";
-import type { Context } from "grammy";
-import type { CommandsFlavor } from "@grammyjs/commands";
-import type { IWorkerPool } from "./workerPoolInterface";
 import { RegexError, WorkerError } from "./errors";
+import type { MyContext } from "./i18n";
+import { recordSubstitution } from "./metrics";
+import {
+	detectDangerousPattern,
+	formatDangerousPatternWarning,
+	isSimplePattern,
+} from "./dangerousPatterns";
+import { getBestTip, sendTransientTip } from "./optimizationTips";
 
 const { MAX_CHAIN_LENGTH, MAX_MESSAGE_LENGTH, WORKER_TIMEOUT_MS } = CONFIG;
+
+/**
+ * Track performance message info for edit handling
+ */
+interface PerformanceMessageInfo {
+	chatId: number;
+	targetMessageId: number;
+	resultMessageId: number;
+	performanceMessageId?: number;
+	isInlined: boolean;
+	timestamp: number;
+}
+
+// In-memory storage for performance message tracking (no persistence)
+const performanceMessageTracker = new Map<string, PerformanceMessageInfo>();
+
+// Cleanup old entries after 48 hours (matching Telegram edit window)
+setInterval(
+	() => {
+		const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+		for (const [key, info] of performanceMessageTracker) {
+			if (info.timestamp < cutoff) {
+				performanceMessageTracker.delete(key);
+			}
+		}
+	},
+	60 * 60 * 1000,
+); // Run cleanup every hour
+
+/**
+ * Format duration in human-readable units
+ */
+function formatDuration(ms: number): string {
+	if (ms < 1000) {
+		return `${Math.round(ms)}ms`;
+	}
+	if (ms < 60000) {
+		return `${(ms / 1000).toFixed(1)}s`;
+	}
+	if (ms < 3600000) {
+		const minutes = Math.floor(ms / 60000);
+		const seconds = Math.round((ms % 60000) / 1000);
+		return `${minutes}m ${seconds}s`;
+	}
+	const hours = Math.floor(ms / 3600000);
+	const minutes = Math.floor((ms % 3600000) / 60000);
+	return `${hours}h ${minutes}m`;
+}
 
 export function parseSedCommands(text: string): string[] {
 	const lines = text.split("\n");
@@ -36,10 +90,8 @@ export function parseSedCommands(text: string): string[] {
 	return commands;
 }
 
-type MyContext = Context & CommandsFlavor;
-
 export interface SedHandlerDependencies {
-	workerPool: IWorkerPool;
+	workerPool: WorkerPool;
 	sendOrEditReply: (
 		ctx: MyContext,
 		targetMsgId: number,
@@ -76,6 +128,7 @@ export class SedHandler {
 
 		const startTime = hasPerformanceFlag ? performance.now() : undefined;
 		let currentText = targetMsgText;
+		let substitutionCount = 0;
 
 		for (const commandString of sedCommands.slice(0, MAX_CHAIN_LENGTH)) {
 			const match = commandString.match(SED_PATTERN);
@@ -98,6 +151,19 @@ export class SedHandler {
 				`Executing command: pattern="${commandForWorker.pattern}", flags="${commandForWorker.flags}", replacement="${commandForWorker.replacement}"`,
 			);
 
+			// Check for dangerous patterns (warn but don't block)
+			if (!isSimplePattern(commandForWorker.pattern)) {
+				const dangerCheck = detectDangerousPattern(commandForWorker.pattern);
+				if (dangerCheck.detected) {
+					this.logger.warn(
+						`Dangerous pattern detected: ${commandForWorker.pattern} (score: ${dangerCheck.complexityScore})`,
+					);
+					// Show warning but continue execution
+					const warning = formatDangerousPatternWarning(dangerCheck);
+					await ctx.reply(warning, { parse_mode: "Markdown" });
+				}
+			}
+
 			try {
 				const task: TaskMessage = {
 					initialText: currentText,
@@ -110,6 +176,7 @@ export class SedHandler {
 					return;
 				}
 				currentText = result.result;
+				substitutionCount++;
 				this.logger.debug(
 					`Command result. New text length: ${currentText.length}`,
 				);
@@ -151,22 +218,73 @@ export class SedHandler {
 			totalPerformanceMs = performance.now() - startTime;
 		}
 
-		let finalMessage = currentText.slice(0, MAX_MESSAGE_LENGTH);
-		if (totalPerformanceMs !== null) {
-			const performanceInfo = ` (⏱️ ${totalPerformanceMs.toFixed(2)}ms)`;
-			if (finalMessage.length + performanceInfo.length > MAX_MESSAGE_LENGTH) {
-				finalMessage =
-					finalMessage.slice(0, MAX_MESSAGE_LENGTH - performanceInfo.length) +
-					performanceInfo;
-			} else {
-				finalMessage += performanceInfo;
+		// Record successful substitution
+		recordSubstitution();
+
+		// Prepare the result message
+		let resultText = currentText.slice(0, MAX_MESSAGE_LENGTH);
+		let performanceText: string | null = null;
+
+		if (hasPerformanceFlag && totalPerformanceMs !== null) {
+			const formattedTime = formatDuration(totalPerformanceMs);
+			performanceText = `Performed ${substitutionCount} substitution${substitutionCount !== 1 ? "s" : ""} in ${formattedTime}`;
+
+			// Calculate if performance text fits inline
+			// Need: result + "\n\n" + performanceText <= MAX_MESSAGE_LENGTH
+			const separatorLength = 2; // "\n\n"
+			const totalLength =
+				resultText.length + separatorLength + performanceText.length;
+
+			if (totalLength <= MAX_MESSAGE_LENGTH) {
+				// Fits inline - add to result
+				resultText += "\n\n" + performanceText;
+				performanceText = null; // Don't send separately
 			}
+			// If doesn't fit, performanceText remains non-null for separate message
 		}
+
 		await this.deps.sendOrEditReply(
 			ctx,
 			targetMsgId,
-			escapeForMarkdownV2AndBackslashes(finalMessage),
+			escapeForMarkdownV2AndBackslashes(resultText),
 			isEdit,
 		);
+
+		// Send separate performance message if needed
+		if (performanceText) {
+			const sentPerfMsg = await ctx.reply(performanceText);
+			// Store tracking info for edit handling
+			const chatId = ctx.chat?.id;
+			if (chatId) {
+				const key = `${chatId}:${targetMsgId}`;
+				// We need the result message ID - get it from the bot_replies tracking
+				// This will be updated when sendOrEditReply stores it
+				performanceMessageTracker.set(key, {
+					chatId,
+					targetMessageId: targetMsgId,
+					resultMessageId: 0, // Will be updated
+					performanceMessageId: sentPerfMsg.message_id,
+					isInlined: false,
+					timestamp: Date.now(),
+				});
+			}
+		}
+
+		// Show optimization tip if applicable (max one per chain)
+		if (ctx.from?.id) {
+			const userId = ctx.from.id;
+			for (const commandString of sedCommands.slice(0, MAX_CHAIN_LENGTH)) {
+				const match = commandString.match(SED_PATTERN);
+				if (!match) continue;
+
+				const pattern = match[1].replace(/\\\//g, "/");
+				const tip = getBestTip(pattern, userId);
+
+				if (tip) {
+					await sendTransientTip(ctx, tip);
+					break; // Only show one tip per chain
+				}
+			}
+		}
 	}
 }

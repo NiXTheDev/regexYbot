@@ -19,7 +19,34 @@ A fast, efficient, and feature-rich Telegram bot built with [grammY](https://git
 - **Error Resilience:** Handles Telegram API errors gracefully (e.g., "message is not modified", flood control) and avoids resending identical messages unnecessarily.
 - **Custom Error Hierarchy:** Granular error types with user-friendly messages (RegexError, RateLimitError, WorkerError, etc.).
 - **Circuit Breaker Pattern:** Prevents cascading failures by stopping requests to failing services.
+- **Multi-Language Support:** Full i18n with 11 languages including English, German, Spanish, Italian, Polish, Swedish, Russian, Ukrainian, Japanese, Korean, and Chinese (Simplified).
 - **Grouping Support:** Fully supports regex capture groups (`(\w+)`) and referencing them in the replacement string using `$1`(modern way), or `\1`(old regexbot, legacy way), with support for mixed syntax
+
+## Internationalization (i18n)
+
+regexYbot supports multiple languages with automatic detection based on Telegram user settings:
+
+**Supported Languages:**
+
+- 🇺🇸 English (default)
+- 🇩🇪 German (Deutsch)
+- 🇪🇸 Spanish (Español)
+- 🇮🇹 Italian (Italiano)
+- 🇵🇱 Polish (Polski)
+- 🇸🇪 Swedish (Svenska)
+- 🇷🇺 Russian (Русский)
+- 🇺🇦 Ukrainian (Українська)
+- 🇯🇵 Japanese (日本語)
+- 🇰🇷 Korean (한국어)
+- 🇨🇳 Chinese Simplified (简体中文)
+
+**Language Commands:**
+
+- `/language` - Show your current language
+- `/language list` - List all available languages
+- `/language set <code>` - Change language (e.g., `/language set de`)
+
+The bot automatically detects your language from Telegram settings. If your language isn't supported, it falls back to English. Translations are stored in the `locales/` directory using the [Fluent](https://projectfluent.org/) format. Contributions for new languages or improvements are welcome!
 
 ## Commands
 
@@ -41,14 +68,12 @@ Configure the bot's behavior with the following environment variables:
 | `LOG_LEVEL`                          |    No    | Sets the minimum log level. <br>**Available levels:** `none`, `debug`, `info`, `warn`, `error`, `fatal`.  | `debug` (development)<br>`info` (production) |
 | `LOG_TEMPLATE`                       |    No    | Customizes the log output format.                                                                         | `[{level}: {module}]: {message}`             |
 | `NODE_ENV`                           |    No    | Set to `production` to default the log level to `info`.                                                   | —                                            |
-| `WORKER_POOL_SIZE`                   |    No    | Sets the number of worker threads for regex processing (legacy pool).                                     | 4                                            |
 | `WORKER_TIMEOUT_MS`                  |    No    | Maximum time a regex operation can run before being terminated (milliseconds).                            | 60000                                        |
-| `WORKER_POOL_V2_ENABLED`             |    No    | Enable WorkerPoolV2 with dynamic scaling and health monitoring.                                           | `false`                                      |
-| `WORKER_POOL_MIN_WORKERS`            |    No    | Minimum number of workers to maintain (WorkerPoolV2).                                                     | 0                                            |
-| `WORKER_POOL_MAX_WORKERS`            |    No    | Maximum number of workers allowed (WorkerPoolV2).                                                         | 8                                            |
-| `WORKER_POOL_INITIAL_WORKERS`        |    No    | Number of workers to spawn at startup (WorkerPoolV2).                                                     | 1                                            |
-| `WORKER_POOL_IDLE_TIMEOUT_MS`        |    No    | Time before idle workers are terminated (WorkerPoolV2).                                                   | 300000                                       |
-| `WORKER_POOL_IDLE_CHECK_INTERVAL_MS` |    No    | How often to check for idle workers (WorkerPoolV2).                                                       | 60000                                        |
+| `WORKER_POOL_MIN_WORKERS`            |    No    | Minimum number of workers to maintain.                                                                    | 0                                            |
+| `WORKER_POOL_MAX_WORKERS`            |    No    | Maximum number of workers allowed.                                                                        | 8                                            |
+| `WORKER_POOL_INITIAL_WORKERS`        |    No    | Number of workers to spawn at startup.                                                                    | 1                                            |
+| `WORKER_POOL_IDLE_TIMEOUT_MS`        |    No    | Time before idle workers are terminated.                                                                  | 300000                                       |
+| `WORKER_POOL_IDLE_CHECK_INTERVAL_MS` |    No    | How often to check for idle workers.                                                                      | 60000                                        |
 | `GRACEFUL_DRAIN`                     |    No    | Enable graceful drain on shutdown. Processes pending tasks instead of rejecting them.                     | `false`                                      |
 | `GRACEFUL_DRAIN_TIMEOUT_MS`          |    No    | Maximum time to spend draining queue during shutdown (milliseconds). Max 9500ms for Docker compatibility. | 8000                                         |
 | `MAX_CHAIN_LENGTH`                   |    No    | Maximum number of sed commands that can be chained together.                                              | 5                                            |
@@ -67,7 +92,42 @@ Configure the bot's behavior with the following environment variables:
 | `LIVENESS_FILE`                      |    No    | Path to the liveness file when healthcheck is enabled.                                                    | `/tmp/bot-alive`                             |
 | `LIVENESS_INTERVAL_MS`               |    No    | How often to update the liveness file (milliseconds).                                                     | 30000                                        |
 
-## Setup & Run
+## Quick Start (Binary)
+
+Pre-built binaries are available for Linux and Windows:
+
+1. **Download** the latest release from [GitHub Releases](https://github.com/NiXTheDev/regexYbot/releases)
+   - Linux: `regexybot-linux-x64.tar.gz`
+   - Windows: `regexybot-windows-x64.zip`
+
+2. **Extract** the binary:
+
+   ```bash
+   # Linux
+   tar -xzf regexybot-linux-x64.tar.gz
+
+   # Windows (PowerShell)
+   Expand-Archive regexybot-windows-x64.zip
+   ```
+
+3. **Run** with your bot token:
+
+   ```bash
+   # Linux/macOS
+   TOKEN=your_telegram_bot_token ./regexybot-linux-x64
+
+   # Windows (Command Prompt)
+   set TOKEN=your_telegram_bot_token
+   regexybot-windows-x64.exe
+
+   # Windows (PowerShell)
+   $env:TOKEN="your_telegram_bot_token"
+   .\regexybot-windows-x64.exe
+   ```
+
+> **Note:** Binaries are self-contained and don't require Bun or Node.js to be installed.
+
+## Setup & Run (From Source)
 
 1.  Ensure you have [Bun](https://bun.sh/) installed.
 2.  Clone this repository.
