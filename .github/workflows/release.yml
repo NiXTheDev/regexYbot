@@ -19,7 +19,7 @@ jobs:
             output: regexybot-linux-x64
           - os: windows-latest
             target: windows-x64
-            output: regexybot-windows-x64.exe
+            output: regexybot-windows-x64
     
     steps:
       - name: Checkout code
@@ -43,8 +43,8 @@ jobs:
       - name: Build binary (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          bun build --compile --target=bun-windows-x64 ./src/index.ts --outfile ${{ matrix.output }}
-          Compress-Archive -Path ${{ matrix.output }} -DestinationPath ${{ matrix.output }}.zip
+          bun build --compile --target=bun-windows-x64 ./src/index.ts --outfile ${{ matrix.output }}.exe
+          Compress-Archive -Path ${{ matrix.output }}.exe -DestinationPath ${{ matrix.output }}.zip
       
       - name: Upload binary artifact (Linux)
         if: matrix.os == 'ubuntu-latest'
