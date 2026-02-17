@@ -2,14 +2,11 @@ import { sql, SQL } from "bun";
 import { CONFIG } from "./config";
 import { Logger } from "./logger";
 import { SED_PATTERN, getRegexFlags } from "./utils";
-import type { Context } from "grammy";
-import type { CommandsFlavor } from "@grammyjs/commands";
+import type { MyContext } from "./i18n";
 
 const logger = new Logger("Database");
 const { CLEANUP_INTERVAL_MS, MAX_HISTORY_PER_CHAT, HISTORY_QUERY_LIMIT } =
 	CONFIG;
-
-type MyContext = Context & CommandsFlavor;
 
 /**
  * Service class for managing database operations
