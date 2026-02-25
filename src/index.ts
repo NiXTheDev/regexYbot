@@ -434,6 +434,19 @@ async function handleTextMessage(
 // --- Command Group ---
 const myCommands = new CommandGroup<MyContext>();
 myCommands.command("privacy", "Show privacy information", async (ctx) => {
+	// In groups, honor the invoking user's language for translation
+	const userLang = ctx.from?.language_code;
+	if (userLang) {
+		try {
+			const locale = await ctx.i18n.getLocale();
+			const target = userLang.toLowerCase();
+			if (locale !== target) {
+				await ctx.i18n.setLocale(target);
+			}
+		} catch {
+			// Fall back to current locale if switching fails
+		}
+	}
 	await ctx.reply(ctx.t("commands.privacy"));
 });
 myCommands.command("start", "Get a greeting message", async (ctx) => {
