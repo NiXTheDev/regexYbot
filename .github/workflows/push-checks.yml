@@ -2,7 +2,7 @@ name: Push Checks
 
 on:
   push:
-    branches: [release, dev]
+    branches: [release, dev, "0.*"]
 
 jobs:
   lint:
