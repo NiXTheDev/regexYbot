@@ -39,6 +39,9 @@ export function getMetrics(workerPool?: WorkerPool): MetricsData {
 		cachedRegexes: cacheStats.size,
 		cacheMaxSize: cacheStats.maxSize,
 		cacheEnabled: cacheStats.enabled,
+		cacheHits: cacheStats.hits,
+		cacheMisses: cacheStats.misses,
+		cacheHitRatio: cacheStats.hitRatio,
 		uptime: Date.now() - botStartTime,
 		workerStats: workerStats
 			? {
@@ -105,12 +108,9 @@ export function formatMetrics(metrics: MetricsData): string {
 	lines.push("Performance Metrics:\n");
 
 	if (metrics.cacheEnabled) {
-		const hitRate =
-			metrics.cachedRegexes > 0
-				? ((metrics.cachedRegexes / metrics.cacheMaxSize) * 100).toFixed(0)
-				: "0";
+		const hitPercent = (metrics.cacheHitRatio * 100).toFixed(0);
 		lines.push(
-			`Cache: ${metrics.cachedRegexes}/${metrics.cacheMaxSize} entries (${hitRate}% full)`,
+			`Cache: ${metrics.cachedRegexes}/${metrics.cacheMaxSize} (${hitPercent}% hits, ${metrics.cacheMisses} misses)`,
 		);
 	} else {
 		lines.push("Cache: Disabled");
@@ -135,6 +135,9 @@ export interface MetricsData {
 	cachedRegexes: number;
 	cacheMaxSize: number;
 	cacheEnabled: boolean;
+	cacheHits: number;
+	cacheMisses: number;
+	cacheHitRatio: number;
 	uptime: number;
 	workerStats: {
 		totalWorkers: number;

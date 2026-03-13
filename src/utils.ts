@@ -42,12 +42,19 @@ export function getRegexCacheStats(): {
 	maxSize: number;
 	ttl: number;
 	enabled: boolean;
+	hits: number;
+	misses: number;
+	hitRatio: number;
 } {
+	const stats = regexCache.getStats();
 	return {
-		size: regexCache.size,
+		size: stats.size,
 		maxSize: CONFIG.CACHE_MAX_SIZE,
 		ttl: CONFIG.CACHE_TTL_MS,
 		enabled: CONFIG.CACHE_ENABLED,
+		hits: stats.hits,
+		misses: stats.misses,
+		hitRatio: stats.hitRatio,
 	};
 }
 

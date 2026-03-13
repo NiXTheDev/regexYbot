@@ -14,6 +14,8 @@ export class LRUCache<K, V> {
 	private cache: Map<K, CacheEntry<V>>;
 	private maxSize: number;
 	private defaultTTL: number | null;
+	private hits: number = 0;
+	private misses: number = 0;
 
 	/**
 	 * @param maxSize - Maximum number of items in cache
@@ -33,18 +35,21 @@ export class LRUCache<K, V> {
 	get(key: K): V | undefined {
 		const entry = this.cache.get(key);
 		if (entry === undefined) {
+			this.misses++;
 			return undefined;
 		}
 
 		// Check if expired
 		if (entry.expiresAt !== null && Date.now() > entry.expiresAt) {
 			this.cache.delete(key);
+			this.misses++;
 			return undefined;
 		}
 
 		// Move to end (most recently used)
 		this.cache.delete(key);
 		this.cache.set(key, entry);
+		this.hits++;
 		return entry.value;
 	}
 
@@ -108,11 +113,19 @@ export class LRUCache<K, V> {
 		size: number;
 		maxSize: number;
 		defaultTTL: number | null;
+		hits: number;
+		misses: number;
+		hitRatio: number;
 	} {
+		const total = this.hits + this.misses;
+		const hitRatio = total > 0 ? this.hits / total : 0;
 		return {
 			size: this.cache.size,
 			maxSize: this.maxSize,
 			defaultTTL: this.defaultTTL,
+			hits: this.hits,
+			misses: this.misses,
+			hitRatio,
 		};
 	}
 
