@@ -51,6 +51,8 @@ export function getMetrics(workerPool?: WorkerPool): MetricsData {
 					queuedTasks: workerStats.queuedTasks,
 					healthStatus: workerStats.health.status,
 					errorRate: (workerStats.health.errorRate * 100).toFixed(1),
+					avgQueueWaitMs: workerStats.avgQueueWaitMs,
+					maxQueueWaitMs: workerStats.maxQueueWaitMs,
 				}
 			: null,
 	};
@@ -123,6 +125,11 @@ export function formatMetrics(metrics: MetricsData): string {
 		`Regex Compilations: ${metrics.totalRegexCompilations.toLocaleString()}`,
 	);
 
+	if (metrics.workerStats) {
+		lines.push(`Avg Queue Wait: ${metrics.workerStats.avgQueueWaitMs}ms`);
+		lines.push(`Max Queue Wait: ${metrics.workerStats.maxQueueWaitMs}ms`);
+	}
+
 	return lines.join("\n");
 }
 
@@ -146,5 +153,7 @@ export interface MetricsData {
 		queuedTasks: number;
 		healthStatus: string;
 		errorRate: string;
+		avgQueueWaitMs: number;
+		maxQueueWaitMs: number;
 	} | null;
 }
