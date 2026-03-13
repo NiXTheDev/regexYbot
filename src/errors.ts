@@ -54,7 +54,7 @@ export class RegexError extends BotError {
 	}
 
 	getUserMessage(): string {
-		return `❌ Invalid regex pattern. Check your syntax and try again.`;
+		return `❌ Invalid regex pattern. Check your syntax (escape special chars with \\) and try again.\n💡 Tip: Use \\/ to escape slashes, \\d for digits, \\w for word chars.`;
 	}
 }
 
@@ -86,12 +86,12 @@ export class TelegramAPIError extends BotError {
 
 	getUserMessage(): string {
 		if (this.statusCode === 429) {
-			return "⏳ Rate limit hit. Please wait a moment before trying again.";
+			return "⏳ Rate limit hit. Too many requests - please wait a moment before trying again.";
 		}
 		if (this.statusCode && this.statusCode >= 500) {
-			return "🔧 Telegram is having issues. Please try again in a moment.";
+			return "🔧 Telegram servers are experiencing issues. Please try again in a minute.";
 		}
-		return "❌ Something went wrong. Please try again.";
+		return "❌ Something went wrong with Telegram. Please try again.";
 	}
 }
 
@@ -140,7 +140,7 @@ export class WorkerError extends BotError {
 	}
 
 	getUserMessage(): string {
-		return "🔧 Processing error. Please try again with a simpler pattern.";
+		return `🔧 Processing error. Try a simpler pattern or reduce the text length.\n💡 Avoid nested quantifiers (like .*) and very long replacements.`;
 	}
 }
 
@@ -164,7 +164,12 @@ export class CircuitBreakerError extends BotError {
 	}
 
 	getUserMessage(): string {
-		return "🔧 Service temporarily unavailable. Please try again later.";
+		const seconds = Math.ceil(Math.max(0, this.openUntil - Date.now()) / 1000);
+		const retryMsg =
+			seconds > 0
+				? ` Please try again in ~${seconds} seconds.`
+				: " Please try again shortly.";
+		return `⏳ Service temporarily unavailable.${retryMsg}`;
 	}
 }
 
