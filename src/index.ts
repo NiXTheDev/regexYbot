@@ -448,10 +448,10 @@ myCommands.command("privacy", "Show privacy information", async (ctx) => {
 			// Fall back to current locale if switching fails
 		}
 	}
-	await ctx.reply(ctx.t("commands.privacy"));
+	await ctx.reply(ctx.t("command-privacy"));
 });
 myCommands.command("start", "Get a greeting message", async (ctx) => {
-	await ctx.reply(ctx.t("commands.start"), { parse_mode: "Markdown" });
+	await ctx.reply(ctx.t("command-start"), { parse_mode: "Markdown" });
 });
 
 myCommands.command("regexhelp", "Get help with regex syntax", async (ctx) => {
