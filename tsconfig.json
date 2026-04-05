@@ -7,8 +7,25 @@
 		"esModuleInterop": true,
 		"skipLibCheck": true,
 		"outDir": "dist",
-		"noEmit": true
+		"noEmit": true,
 	},
-	"include": ["src/**/*"],
-	"exclude": ["node_modules"]
+	"include": ["src"],
+	"exclude": ["node_modules"],
+	"paths": {
+		"@/*": ["src/*"],
+	},
+	"noUnusedLocals": true,
+	"noUnusedParameters": true,
+	"noUncheckedSideEffectImports": true,
+	"noFallthroughCasesInSwitch": true,
+	"allowUnusedLabels": false,
+	"allowUnreachableCode": false,
+	"noUncheckedIndexedAccess": true,
+	"noPropertyAccessFromIndexSignature": true,
+	// "erasableSyntaxOnly": true, // not sure why do we need this but leave it here in case it's needed
+	"noImplicitOverride": true,
+	"noErrorTruncation": false, // set to true when debugging to see full types, or by preference
+	"exactOptionalPropertyTypes": true, // if ("name" in user) {} returns true even if user.name = undefined, name exists, it's all it cares about
+	// "allowJs": true, // uncomment both lines if using mixed JS/TS files
+	// "checkJs": true
 }
