@@ -1,6 +1,5 @@
 # dependencies (bun install)
 node_modules
-*.lock
 *.lockb
 
 # output

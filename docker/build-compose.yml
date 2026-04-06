@@ -1,6 +1,12 @@
+# this compose is meant for those who prefer to build the image themselves(looking at you @ExposedCat)
+# you should be able to just clone the repo, edit this file as you see fit and `docker compose up -d` to run the bot
+# or `podman compose up -d` if you prefer podman
+
 services:
   regexybot:
-    image: ghcr.io/nixthedev/regexybot:release # release for stable builds, dev for live updates as they are pushed, dev may be broken and not work
+    build:
+      context: ..
+      dockerfile: ../Dockerfile
     container_name: regexybot
     restart: unless-stopped
     stop_grace_period: 1m

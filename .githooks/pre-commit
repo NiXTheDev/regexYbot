@@ -1,0 +1,40 @@
+#!/bin/sh
+set -euxo pipefail
+
+# Ensure bun is available
+if ! command -v bun >/dev/null 2>&1; then
+    echo "ERROR: bun not found in PATH"
+    exit 1
+fi
+
+# ---- Original sample checks ----
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+    against=HEAD
+else
+    against=$(git hash-object -t tree /dev/null)
+fi
+
+# Get config, default to false if missing
+allownonascii=$(git config --type=bool hooks.allownonascii 2>/dev/null) || allownonascii=false
+
+if [ "$allownonascii" != "true" ]; then
+    # Check for non-ASCII filenames
+    if git diff-index --cached --name-only --diff-filter=A -z $against |
+         tr '\0' '\n' |
+         LC_ALL=C grep -q '[^ -~]'; then
+        cat <<\EOF
+Error: Attempt to add a non-ASCII file name.
+EOF
+        exit 1
+    fi
+fi
+
+git diff-index --check --cached $against -- || exit 1
+
+# ---- Checks ----
+bunx prettier --check .
+bun --bun tsc --noEmit
+bunx eslint
+bun test
+
+echo "All checks passed!"

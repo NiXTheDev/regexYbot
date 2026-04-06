@@ -29,6 +29,7 @@ import {
 } from "./i18n";
 import { explainPattern } from "./explain";
 import { getMetrics, formatHealthStatus, formatMetrics } from "./metrics";
+import { VERSION, COMMIT, RELEASED_AT, CHANGES } from "./version";
 
 // --- Configuration ---
 const {
@@ -527,6 +528,15 @@ myCommands.command("language", "Change bot language", async (ctx) => {
 myCommands.command("health", "Show bot health status", async (ctx) => {
 	const metrics = getMetrics(workerPool);
 	await ctx.reply(formatHealthStatus(metrics));
+});
+
+myCommands.command("version", "Show bot version", async (ctx) => {
+	const message = `I am currently on version ${VERSION} (${COMMIT})
+This version was released on ${RELEASED_AT}
+
+It includes the following changes:
+${CHANGES}`;
+	await ctx.reply(message);
 });
 
 myCommands.command("metrics", "Show performance metrics", async (ctx) => {

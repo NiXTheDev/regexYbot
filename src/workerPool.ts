@@ -52,6 +52,7 @@ export class WorkerPool {
 		task: TaskMessage;
 		resolve: (value: ResultMessage) => void;
 		reject: (reason?: unknown) => void;
+		enqueueTime: number;
 	}> = [];
 	private pendingTasks = new Map<
 		Worker,
@@ -66,6 +67,10 @@ export class WorkerPool {
 	private idleCheckInterval: NodeJS.Timeout | null = null;
 	private isShuttingDown = false;
 	private healthMonitor: HealthMonitor;
+	/** Rolling window of last 100 wait times */
+	private waitTimes: number[] = [];
+	/** Peak wait time since pool start */
+	private maxWaitTime: number = 0;
 
 	constructor(config: WorkerPoolConfig) {
 		this.config = config;
@@ -181,8 +186,8 @@ export class WorkerPool {
 
 		// Assign task to idle worker
 		if (idleWorker && this.taskQueue.length > 0) {
-			const { task, resolve, reject } = this.taskQueue.shift()!;
-			this.assignTaskToWorker(idleWorker, task, resolve, reject);
+			const { task, resolve, reject, enqueueTime } = this.taskQueue.shift()!;
+			this.assignTaskToWorker(idleWorker, task, resolve, reject, enqueueTime);
 
 			// Try to process more tasks if available
 			this.processQueue();
@@ -210,8 +215,8 @@ export class WorkerPool {
 
 		// Assign task to idle worker
 		if (idleWorker && this.taskQueue.length > 0) {
-			const { task, resolve, reject } = this.taskQueue.shift()!;
-			this.assignTaskToWorker(idleWorker, task, resolve, reject);
+			const { task, resolve, reject, enqueueTime } = this.taskQueue.shift()!;
+			this.assignTaskToWorker(idleWorker, task, resolve, reject, enqueueTime);
 
 			// Try to process more tasks if available
 			this.processQueueDuringShutdown();
@@ -226,7 +231,20 @@ export class WorkerPool {
 		task: TaskMessage,
 		resolve: (value: ResultMessage) => void,
 		reject: (reason?: unknown) => void,
+		enqueueTime: number,
 	): void {
+		// Calculate and record queue wait time
+		const waitTime = Date.now() - enqueueTime;
+		this.waitTimes.push(waitTime);
+		// Keep only last 100 wait times
+		if (this.waitTimes.length > 100) {
+			this.waitTimes.shift();
+		}
+		// Update max wait time
+		if (waitTime > this.maxWaitTime) {
+			this.maxWaitTime = waitTime;
+		}
+
 		const state = this.workers.get(worker);
 		if (!state) return;
 
@@ -438,7 +456,12 @@ export class WorkerPool {
 		logger.debug(`Queueing new task (queue size: ${this.taskQueue.length})`);
 
 		return new Promise((resolve, reject) => {
-			this.taskQueue.push({ task: taskData, resolve, reject });
+			this.taskQueue.push({
+				task: taskData,
+				resolve,
+				reject,
+				enqueueTime: Date.now(),
+			});
 			this.processQueue();
 		});
 	}
@@ -454,6 +477,8 @@ export class WorkerPool {
 		pendingTasks: number;
 		isShuttingDown: boolean;
 		health: HealthMetrics;
+		avgQueueWaitMs: number;
+		maxQueueWaitMs: number;
 	} {
 		let idleWorkers = 0;
 		let busyWorkers = 0;
@@ -473,6 +498,14 @@ export class WorkerPool {
 			this.pendingTasks.size,
 		);
 
+		// Calculate average wait time
+		const avgQueueWaitMs =
+			this.waitTimes.length > 0
+				? Math.round(
+						this.waitTimes.reduce((a, b) => a + b, 0) / this.waitTimes.length,
+					)
+				: 0;
+
 		return {
 			totalWorkers: this.workers.size,
 			idleWorkers,
@@ -481,6 +514,8 @@ export class WorkerPool {
 			pendingTasks: this.pendingTasks.size,
 			isShuttingDown: this.isShuttingDown,
 			health,
+			avgQueueWaitMs,
+			maxQueueWaitMs: this.maxWaitTime,
 		};
 	}
 

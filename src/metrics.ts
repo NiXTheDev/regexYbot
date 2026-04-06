@@ -39,6 +39,9 @@ export function getMetrics(workerPool?: WorkerPool): MetricsData {
 		cachedRegexes: cacheStats.size,
 		cacheMaxSize: cacheStats.maxSize,
 		cacheEnabled: cacheStats.enabled,
+		cacheHits: cacheStats.hits,
+		cacheMisses: cacheStats.misses,
+		cacheHitRatio: cacheStats.hitRatio,
 		uptime: Date.now() - botStartTime,
 		workerStats: workerStats
 			? {
@@ -48,6 +51,8 @@ export function getMetrics(workerPool?: WorkerPool): MetricsData {
 					queuedTasks: workerStats.queuedTasks,
 					healthStatus: workerStats.health.status,
 					errorRate: (workerStats.health.errorRate * 100).toFixed(1),
+					avgQueueWaitMs: workerStats.avgQueueWaitMs,
+					maxQueueWaitMs: workerStats.maxQueueWaitMs,
 				}
 			: null,
 	};
@@ -105,12 +110,9 @@ export function formatMetrics(metrics: MetricsData): string {
 	lines.push("Performance Metrics:\n");
 
 	if (metrics.cacheEnabled) {
-		const hitRate =
-			metrics.cachedRegexes > 0
-				? ((metrics.cachedRegexes / metrics.cacheMaxSize) * 100).toFixed(0)
-				: "0";
+		const hitPercent = (metrics.cacheHitRatio * 100).toFixed(0);
 		lines.push(
-			`Cache: ${metrics.cachedRegexes}/${metrics.cacheMaxSize} entries (${hitRate}% full)`,
+			`Cache: ${metrics.cachedRegexes}/${metrics.cacheMaxSize} (${hitPercent}% hits, ${metrics.cacheMisses} misses)`,
 		);
 	} else {
 		lines.push("Cache: Disabled");
@@ -122,6 +124,11 @@ export function formatMetrics(metrics: MetricsData): string {
 	lines.push(
 		`Regex Compilations: ${metrics.totalRegexCompilations.toLocaleString()}`,
 	);
+
+	if (metrics.workerStats) {
+		lines.push(`Avg Queue Wait: ${metrics.workerStats.avgQueueWaitMs}ms`);
+		lines.push(`Max Queue Wait: ${metrics.workerStats.maxQueueWaitMs}ms`);
+	}
 
 	return lines.join("\n");
 }
@@ -135,6 +142,9 @@ export interface MetricsData {
 	cachedRegexes: number;
 	cacheMaxSize: number;
 	cacheEnabled: boolean;
+	cacheHits: number;
+	cacheMisses: number;
+	cacheHitRatio: number;
 	uptime: number;
 	workerStats: {
 		totalWorkers: number;
@@ -143,5 +153,7 @@ export interface MetricsData {
 		queuedTasks: number;
 		healthStatus: string;
 		errorRate: string;
+		avgQueueWaitMs: number;
+		maxQueueWaitMs: number;
 	} | null;
 }
