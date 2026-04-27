@@ -127,9 +127,15 @@ export class DatabaseService {
 		targetMessageId: number,
 		chatId: number,
 		botMessageId: number,
+		sedCommand?: string,
 	): Promise<void> {
-		await this
-			.db`INSERT OR REPLACE INTO bot_replies (target_message_id, chat_id, bot_message_id) VALUES (${targetMessageId}, ${chatId}, ${botMessageId})`;
+		if (sedCommand !== undefined) {
+			await this
+				.db`INSERT OR REPLACE INTO bot_replies (target_message_id, chat_id, bot_message_id, sed_command) VALUES (${targetMessageId}, ${chatId}, ${botMessageId}, ${sedCommand})`;
+		} else {
+			await this
+				.db`INSERT OR REPLACE INTO bot_replies (target_message_id, chat_id, bot_message_id) VALUES (${targetMessageId}, ${chatId}, ${botMessageId})`;
+		}
 	}
 
 	async getBotReplyMessageId(
@@ -140,6 +146,16 @@ export class DatabaseService {
 			await this
 				.db`SELECT bot_message_id FROM bot_replies WHERE target_message_id = ${targetMessageId} AND chat_id = ${chatId}`
 		)[0]?.bot_message_id;
+	}
+
+	async getSedCommand(
+		targetMessageId: number,
+		chatId: number,
+	): Promise<string | undefined> {
+		return (
+			await this
+				.db`SELECT sed_command FROM bot_replies WHERE target_message_id = ${targetMessageId} AND chat_id = ${chatId}`
+		)[0]?.sed_command;
 	}
 
 	async findMessagesInHistory(

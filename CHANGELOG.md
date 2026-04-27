@@ -3,6 +3,95 @@
 All notable changes to this project will be documented in this file.
 
 <details open>
+<summary><b>[0.2.0] - 2026-04-27</b></summary>
+
+### New Commands & Observability (#68)
+
+- **/version Command**: Added version information command
+  - Displays current bot version and build info
+  - Useful for debugging and support
+- **Improved Error Messages**: Enhanced error handling and messaging
+  - More descriptive error context for users
+  - Better error categorization
+
+### Performance & Metrics (#68)
+
+- **Cache Metrics**: Enhanced LRU cache instrumentation
+  - Cache hit/miss tracking
+  - Performance monitoring improvements
+- **Worker Queue Tracking**: Added queue depth monitoring
+  - Real-time queue statistics
+  - Better visibility into worker pool health
+
+### Security (#68)
+
+- **CVE Fix**: Security vulnerability remediation
+  - Patched identified security issue
+  - Updated dependencies with security fixes
+
+### Infrastructure (#68)
+
+- **Pre-built Binaries**: Added binary distribution support
+  - Linux binaries (`regexybot-linux-x64.tar.gz`)
+  - Windows binaries (`regexybot-windows-x64.zip`)
+  - Self-contained executables (no Bun/Node required)
+
+</details>
+
+<details open>
+<summary><b>[0.1.10] - 2026-04-27</b></summary>
+
+### WorkerPool Consolidation (#57)
+
+- **WorkerPool V1 Deprecation**: Merged WorkerPoolV2 into WorkerPool
+  - Unified worker pool implementation
+  - Dynamic scaling, health monitoring, idle worker termination
+  - Graceful shutdown with configurable drain mode
+  - Removed separate WorkerPoolV2 interface
+
+### New Commands (#57)
+
+- **/explain Command**: Pattern explanation utility
+  - Breaks down regex patterns into components
+  - Explains character classes, quantifiers, groups
+  - Shows match examples
+- **/health Command**: Health status monitoring
+  - Real-time health check endpoint
+  - Status: healthy/degraded/unhealthy
+  - Configurable thresholds
+- **/metrics Command**: Prometheus-style metrics
+  - Regex execution stats
+  - Cache performance metrics
+  - Worker pool statistics
+
+### Security & Safety (#57)
+
+- **Dangerous Patterns Detection**: Pattern safety analysis
+  - Identifies potentially dangerous regex patterns
+  - Polynomial/catastrophic backtracking warnings
+  - ReDoS detection
+- **Optimization Tips**: Regex optimization guidance
+  - Performance improvement suggestions
+  - Pattern simplification advice
+
+### Regex Help (#57)
+
+- **Regex Help Command**: Built-in regex documentation
+  - Common pattern examples
+  - Flag explanations
+  - Capture group reference guidance
+
+### Internationalization (#57)
+
+- **Multi-Language Support**: Full i18n with 11 languages
+  - English (default), German, Spanish, Italian, Polish
+  - Swedish, Russian, Ukrainian, Japanese, Korean, Chinese
+  - Fluent format localization files
+  - Automatic language detection from Telegram settings
+
+</details>
+
+<details open>
 <summary><b>[0.1.9] - 2026-02-15</b></summary>
 
 ### Epic: regexYbot Enhancement Roadmap
