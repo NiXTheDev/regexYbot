@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 
 <details open>
+<summary><b>[0.2.1] - 2026-04-28</b></summary>
+
+### Diff Command Argument Support
+
+- **/diff Command**: Added optional format argument for flexible output
+  - Usage: `/diff [plain|true|image]`
+  - Backward compatible: no argument defaults to `plain` format
+- **Plain Format (default)**: Inline diff using `~~old~~ *new*` markdown syntax
+- **True Format**: Markdown diff block with ```diff syntax highlighting
+- **Image Format**: SVG image visualization of the diff
+
+</details>
+
+<details open>
 <summary><b>[0.2.0] - 2026-04-27</b></summary>
 
 ### New Commands & Observability (#68)
