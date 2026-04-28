@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
 
 </details>
 
-<details open>
+<details>
 <summary><b>[0.2.0] - 2026-04-27</b></summary>
 
 ### New Commands & Observability (#68)
@@ -52,7 +52,7 @@ All notable changes to this project will be documented in this file.
 
 </details>
 
-<details open>
+<details>
 <summary><b>[0.1.10] - 2026-04-27</b></summary>
 
 ### WorkerPool Consolidation (#57)
@@ -105,7 +105,7 @@ All notable changes to this project will be documented in this file.
 
 </details>
 
-<details open>
+<details>
 <summary><b>[0.1.9] - 2026-02-15</b></summary>
 
 ### Epic: regexYbot Enhancement Roadmap
