@@ -1,10 +1,15 @@
 import { CommandGroup, commands } from "@grammyjs/commands";
 import { InlineKeyboard } from "grammy";
-import { computeDiff } from "./diff";
+import {
+	computeDiff,
+	computeDiffMarkdown,
+	generateDiffImage,
+	DiffFormat,
+} from "./diff";
 import { run } from "@grammyjs/runner";
 import { SQL } from "bun";
 import { writeFileSync } from "node:fs";
-import { Bot, GrammyError, session } from "grammy";
+import { Bot, GrammyError, InputFile, session } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { CONFIG } from "./config";
 import { Logger, withCorrelation } from "./logger";
@@ -547,10 +552,25 @@ myCommands.command("metrics", "Show performance metrics", async (ctx) => {
 });
 
 // /diff: Show diff for the last sed substitution
+// Usage: /diff [plain|true|image]
 myCommands.command(
 	"diff",
-	"Show diff for the last sed substitution",
+	"Show diff for the last sed substitution. Usage: /diff [plain|true|image]",
 	async (ctx) => {
+		// Parse format argument from command
+		const formatArg = (ctx.match as string)?.trim().toLowerCase() as
+			| DiffFormat
+			| undefined;
+		const format: DiffFormat =
+			formatArg && ["plain", "true", "image"].includes(formatArg)
+				? formatArg
+				: "plain";
+
+		if (formatArg && !["plain", "true", "image"].includes(formatArg)) {
+			await ctx.reply("Usage: /diff [plain|true|image]");
+			return;
+		}
+
 		// Ensure the command is used in reply to a bot's sed response
 		const replyTo = ctx.msg?.reply_to_message;
 		if (!replyTo) {
@@ -585,24 +605,68 @@ myCommands.command(
 			await ctx.reply("Original command not found");
 			return;
 		}
-		// Compute the diff using the existing utility
-		const diffText = computeDiff(originalText ?? "", sedCommand);
-		// Send the diff as a separate message with a dismiss button
-		try {
-			const diffMessage = await ctx.api.sendMessage(chatId, diffText, {
-				parse_mode: "MarkdownV2",
-			});
-			const diffMessageId = diffMessage.message_id;
-			const keyboard = new InlineKeyboard();
-			keyboard.row(
-				InlineKeyboard.text("Hide diff", `diff:hide:${diffMessageId}`),
-			);
-			await ctx.api.editMessageReplyMarkup(chatId, diffMessageId, {
-				reply_markup: keyboard,
-			});
-		} catch {
-			// Fallback: just send the diff without a button if something goes wrong
-			await ctx.api.sendMessage(chatId, diffText, { parse_mode: "MarkdownV2" });
+
+		// Handle different diff formats
+		if (format === "image") {
+			// Generate SVG image and send as document
+			const svgContent = generateDiffImage(originalText ?? "", sedCommand);
+			try {
+				const svgBytes = new TextEncoder().encode(svgContent);
+				const diffMessage = await ctx.api.sendDocument(
+					chatId,
+					new InputFile(svgBytes, "diff.svg"),
+				);
+				const diffMessageId = diffMessage.message_id;
+				const keyboard = new InlineKeyboard();
+				keyboard.row(
+					InlineKeyboard.text("Hide diff", `diff:hide:${diffMessageId}`),
+				);
+				await ctx.api.editMessageReplyMarkup(chatId, diffMessageId, {
+					reply_markup: keyboard,
+				});
+			} catch {
+				await ctx.reply("Failed to send diff image");
+			}
+		} else if (format === "true") {
+			// Compute markdown diff
+			const diffText = computeDiffMarkdown(originalText ?? "", sedCommand);
+			try {
+				const diffMessage = await ctx.api.sendMessage(chatId, diffText, {
+					parse_mode: "MarkdownV2",
+				});
+				const diffMessageId = diffMessage.message_id;
+				const keyboard = new InlineKeyboard();
+				keyboard.row(
+					InlineKeyboard.text("Hide diff", `diff:hide:${diffMessageId}`),
+				);
+				await ctx.api.editMessageReplyMarkup(chatId, diffMessageId, {
+					reply_markup: keyboard,
+				});
+			} catch {
+				await ctx.api.sendMessage(chatId, diffText, {
+					parse_mode: "MarkdownV2",
+				});
+			}
+		} else {
+			// Default: plain format
+			const diffText = computeDiff(originalText ?? "", sedCommand, "plain");
+			try {
+				const diffMessage = await ctx.api.sendMessage(chatId, diffText, {
+					parse_mode: "MarkdownV2",
+				});
+				const diffMessageId = diffMessage.message_id;
+				const keyboard = new InlineKeyboard();
+				keyboard.row(
+					InlineKeyboard.text("Hide diff", `diff:hide:${diffMessageId}`),
+				);
+				await ctx.api.editMessageReplyMarkup(chatId, diffMessageId, {
+					reply_markup: keyboard,
+				});
+			} catch {
+				await ctx.api.sendMessage(chatId, diffText, {
+					parse_mode: "MarkdownV2",
+				});
+			}
 		}
 	},
 );
