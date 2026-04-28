@@ -3,6 +3,25 @@ import { SED_PATTERN, getRegexFlags } from "./utils";
 
 export type DiffFormat = "plain" | "true" | "image";
 
+function escapeXml(unsafe: string): string {
+	return unsafe.replace(/[&<>"']/g, (c) => {
+		switch (c) {
+			case "&":
+				return "&amp;";
+			case "<":
+				return "&lt;";
+			case ">":
+				return "&gt;";
+			case '"':
+				return "&quot;";
+			case "'":
+				return "&apos;";
+			default:
+				return c;
+		}
+	});
+}
+
 function processDiff(
 	originalText: string,
 	sedCommand: string,
@@ -62,6 +81,10 @@ export function computeDiff(
 	sedCommand: string,
 	format: DiffFormat = "plain",
 ): string {
+	if (format === "image") {
+		return generateDiffImage(originalText, sedCommand);
+	}
+
 	const processed = processDiff(originalText, sedCommand);
 	if (!processed) {
 		return originalText;
@@ -80,9 +103,6 @@ export function computeDiff(
 				.join("\n");
 			return `\`\`\`diff\n${diffLines}\n\`\`\``;
 		}
-		case "image":
-			// Image format is not yet implemented, return original text for now
-			return originalText;
 		default:
 			return originalText;
 	}
@@ -101,4 +121,56 @@ export function computeDiffMarkdown(
 	sedCommand: string,
 ): string {
 	return computeDiff(originalText, sedCommand, "true");
+}
+
+/**
+ * Generate an SVG image showing the diff between original text and sed replacement.
+ * Shows original matches with strikethrough in red, replacements in green.
+ *
+ * @param originalText - The original text to diff against
+ * @param sedCommand - The sed command string (e.g., "s/pattern/replacement/gi")
+ * @returns SVG string representing the diff image
+ */
+export function generateDiffImage(
+	originalText: string,
+	sedCommand: string,
+): string {
+	const processed = processDiff(originalText, sedCommand);
+
+	const svgWidth = 600;
+	const lineHeight = 22;
+	const padding = 10;
+	const fontSize = 14;
+
+	if (!processed) {
+		const height = padding * 2 + lineHeight;
+		return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${height}" style="background-color: #f5f5f5;">
+  <text x="${padding}" y="${padding + fontSize}" font-family="Courier, monospace" font-size="${fontSize}" fill="#6b7280">
+    No diff to display (no matches or invalid command)
+  </text>
+</svg>`;
+	}
+
+	const { replacement, uniqueMatches } = processed;
+	const lineCount = uniqueMatches.length;
+	const height = padding * 2 + lineCount * lineHeight;
+
+	const lines = uniqueMatches
+		.map((match, index) => {
+			const y = padding + fontSize + index * lineHeight;
+			const escapedMatch = escapeXml(match);
+			const escapedReplacement = escapeXml(replacement);
+			return `  <text x="${padding}" y="${y}" font-family="Courier, monospace" font-size="${fontSize}">
+    <tspan style="text-decoration: line-through; fill: #dc2626;">${escapedMatch}</tspan>
+    <tspan style="fill: #374151;"> → </tspan>
+    <tspan style="fill: #16a34a; font-style: italic;">${escapedReplacement}</tspan>
+  </text>`;
+		})
+		.join("\n");
+
+	return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${height}" style="background-color: #f5f5f5;">
+${lines}
+</svg>`;
 }
