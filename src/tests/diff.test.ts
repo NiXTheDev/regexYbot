@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { computeDiff, generateDiffImage } from "../diff";
+import { computeDiff, generateDiffImage, DiffFormat } from "../diff";
 
 describe("computeDiff", () => {
 	describe("basic substitution", () => {
@@ -84,5 +84,39 @@ describe("generateDiffImage", () => {
 	test("should show arrow between match and replacement", () => {
 		const result = generateDiffImage("test", "s/test/replacement/");
 		expect(result).toInclude("→");
+	});
+});
+
+describe("markdown format", () => {
+	test("should return markdown diff block for 'true' format", () => {
+		const result = computeDiff("Hello foo", "s/foo/bar/", "true");
+		expect(result).toStartWith("```diff\n");
+		expect(result).toInclude("- foo");
+		expect(result).toInclude("+ bar");
+		expect(result).toInclude("```");
+	});
+
+	test("should include multiple diff lines for multiple matches", () => {
+		const result = computeDiff("foo bar baz", "s/[a-z]+/X/g", "true");
+		expect(result).toInclude("- foo");
+		expect(result).toInclude("+ X");
+		expect(result).toInclude("- bar");
+		expect(result).toInclude("- baz");
+	});
+});
+
+describe("invalid format", () => {
+	test("should fall back to original text for invalid format", () => {
+		const result = computeDiff(
+			"Hello foo",
+			"s/foo/bar/",
+			"invalid" as DiffFormat,
+		);
+		expect(result).toBe("Hello foo");
+	});
+
+	test("should return original text even with valid matches and invalid format", () => {
+		const result = computeDiff("foo foo", "s/o/X/g", "pdf" as DiffFormat);
+		expect(result).toBe("foo foo");
 	});
 });
