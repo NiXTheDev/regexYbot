@@ -1,5 +1,5 @@
 #!/bin/sh
-set -euxo pipefail
+set -euo pipefail
 
 # Ensure bun is available
 if ! command -v bun >/dev/null 2>&1; then

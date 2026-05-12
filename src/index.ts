@@ -1,8 +1,15 @@
 import { CommandGroup, commands } from "@grammyjs/commands";
+import { InlineKeyboard } from "grammy";
+import {
+	computeDiff,
+	computeDiffMarkdown,
+	generateDiffImage,
+	DiffFormat,
+} from "./diff";
 import { run } from "@grammyjs/runner";
 import { SQL } from "bun";
 import { writeFileSync } from "node:fs";
-import { Bot, GrammyError, session } from "grammy";
+import { Bot, GrammyError, InputFile, session } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { CONFIG } from "./config";
 import { Logger, withCorrelation } from "./logger";
@@ -544,11 +551,145 @@ myCommands.command("metrics", "Show performance metrics", async (ctx) => {
 	await ctx.reply(formatMetrics(metrics));
 });
 
-bot.use(myCommands);
+// /diff: Show diff for the last sed substitution
+// Usage: /diff [plain|true|image]
+myCommands.command(
+	"diff",
+	"Show diff for the last sed substitution. Usage: /diff [plain|true|image]",
+	async (ctx) => {
+		// Parse format argument from command
+		const formatArg = (ctx.match as string)?.trim().toLowerCase() as
+			| DiffFormat
+			| undefined;
+		const format: DiffFormat =
+			formatArg && ["plain", "true", "image"].includes(formatArg)
+				? formatArg
+				: "plain";
+
+		if (formatArg && !["plain", "true", "image"].includes(formatArg)) {
+			await ctx.reply("Usage: /diff [plain|true|image]");
+			return;
+		}
+
+		// Ensure the command is used in reply to a bot's sed response
+		const replyTo = ctx.msg?.reply_to_message;
+		if (!replyTo) {
+			await ctx.reply("Please use /diff in reply to the bot's response");
+			return;
+		}
+		const chatId = ctx.chat?.id;
+		if (chatId === undefined) {
+			await ctx.reply("Original command not found");
+			return;
+		}
+		const botMessageId = replyTo.message_id;
+		// Look up the original target message id from the bot_replies table
+		const mappingRows =
+			await (db`SELECT target_message_id FROM bot_replies WHERE chat_id = ${chatId} AND bot_message_id = ${botMessageId}` as unknown as {
+				target_message_id: number;
+			}[]);
+		const targetMessageId = mappingRows?.[0]?.target_message_id;
+		if (!targetMessageId) {
+			await ctx.reply("Original command not found");
+			return;
+		}
+		// Fetch the original text from message_history
+		const origRow =
+			await (db`SELECT text FROM message_history WHERE chat_id = ${chatId} AND message_id = ${targetMessageId}` as unknown as {
+				text: string | null;
+			}[]);
+		const originalText = origRow?.[0]?.text ?? "";
+		// Fetch the sed command used for this target
+		const sedCommand = await dbService.getSedCommand(targetMessageId, chatId);
+		if (!sedCommand) {
+			await ctx.reply("Original command not found");
+			return;
+		}
+
+		// Handle different diff formats
+		if (format === "image") {
+			// Generate SVG image and send as document
+			const svgContent = generateDiffImage(originalText ?? "", sedCommand);
+			try {
+				const svgBytes = new TextEncoder().encode(svgContent);
+				const diffMessage = await ctx.api.sendDocument(
+					chatId,
+					new InputFile(svgBytes, "diff.svg"),
+				);
+				const diffMessageId = diffMessage.message_id;
+				const keyboard = new InlineKeyboard();
+				keyboard.row(
+					InlineKeyboard.text("Hide diff", `diff:hide:${diffMessageId}`),
+				);
+				await ctx.api.editMessageReplyMarkup(chatId, diffMessageId, {
+					reply_markup: keyboard,
+				});
+			} catch {
+				await ctx.reply("Failed to send diff image");
+			}
+		} else if (format === "true") {
+			// Compute markdown diff
+			const diffText = computeDiffMarkdown(originalText ?? "", sedCommand);
+			try {
+				const diffMessage = await ctx.api.sendMessage(chatId, diffText, {
+					parse_mode: "MarkdownV2",
+				});
+				const diffMessageId = diffMessage.message_id;
+				const keyboard = new InlineKeyboard();
+				keyboard.row(
+					InlineKeyboard.text("Hide diff", `diff:hide:${diffMessageId}`),
+				);
+				await ctx.api.editMessageReplyMarkup(chatId, diffMessageId, {
+					reply_markup: keyboard,
+				});
+			} catch {
+				await ctx.api.sendMessage(chatId, diffText, {
+					parse_mode: "MarkdownV2",
+				});
+			}
+		} else {
+			// Default: plain format
+			const diffText = computeDiff(originalText ?? "", sedCommand, "plain");
+			try {
+				const diffMessage = await ctx.api.sendMessage(chatId, diffText, {
+					parse_mode: "MarkdownV2",
+				});
+				const diffMessageId = diffMessage.message_id;
+				const keyboard = new InlineKeyboard();
+				keyboard.row(
+					InlineKeyboard.text("Hide diff", `diff:hide:${diffMessageId}`),
+				);
+				await ctx.api.editMessageReplyMarkup(chatId, diffMessageId, {
+					reply_markup: keyboard,
+				});
+			} catch {
+				await ctx.api.sendMessage(chatId, diffText, {
+					parse_mode: "MarkdownV2",
+				});
+			}
+		}
+	},
+);
+// bot.use(myCommands) is already registered above
 
 // --- Callback Query Handler for Regex Help ---
 bot.on("callback_query:data", async (ctx) => {
 	const data = ctx.callbackQuery.data;
+
+	// Diff hide handler
+	if (data && data.startsWith("diff:hide:")) {
+		const parts = data.split(":");
+		const diffMessageId = Number(parts[2]);
+		if (!Number.isNaN(diffMessageId)) {
+			try {
+				await ctx.api.deleteMessage(ctx.chat!.id, diffMessageId);
+			} catch {
+				// Ignore delete errors
+			}
+		}
+		await ctx.answerCallbackQuery();
+		return;
+	}
 
 	if (!data.startsWith("regexhelp:")) {
 		return;

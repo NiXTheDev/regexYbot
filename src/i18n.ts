@@ -67,7 +67,7 @@ export const AVAILABLE_LANGUAGES: Language[] = [
 export const i18n = new I18n<MyContext>({
 	defaultLocale: "en",
 	useSession: true, // Store user language preference in session
-	directory: "locales", // Load .ftl files from locales/
+	directory: "src/locales", // Load .ftl files from src/locales/
 });
 
 /**
