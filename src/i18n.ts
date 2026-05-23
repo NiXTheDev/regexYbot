@@ -7,6 +7,7 @@
 import { I18n, type I18nFlavor } from "@grammyjs/i18n";
 import type { Context, SessionFlavor } from "grammy";
 import type { CommandsFlavor } from "@grammyjs/commands";
+import path from "node:path";
 
 // Session data interface
 export interface SessionData {
@@ -67,7 +68,7 @@ export const AVAILABLE_LANGUAGES: Language[] = [
 export const i18n = new I18n<MyContext>({
 	defaultLocale: "en",
 	useSession: true, // Store user language preference in session
-	directory: "src/locales", // Load .ftl files from src/locales/
+	directory: path.resolve("src/locales"), // Load .ftl files from src/locales/
 });
 
 /**

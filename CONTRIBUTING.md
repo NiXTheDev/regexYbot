@@ -388,7 +388,7 @@ bun test     # Run tests
 
 ```
 regexYbot/
-├── .github/
+├── .forgejo/
 │   └── workflows/          # GitHub Actions CI/CD workflows
 ├── src/
 │   ├── index.ts           # Main bot entry point

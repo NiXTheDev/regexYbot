@@ -1,0 +1,52 @@
+{
+	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
+	"platform": "forgejo",
+	"endpoint": "https://hangar.nixthedev.ru/api/v1/",
+	"onboarding": true,
+	"extends": [
+		"config:recommended",
+		":disableDependencyDashboard",
+		"group:monorepos"
+	],
+	"baseBranches": ["dev"],
+	"schedule": ["on Monday at 10:00"],
+	"timezone": "Europe/Moscow",
+	"semanticCommits": "enabled",
+	"semanticCommitType": "chore",
+	"platformAutomerge": true,
+	"labels": ["dependencies", "automerge"],
+	"prHourlyLimit": 5,
+	"prConcurrentLimit": 10,
+	"packageRules": [
+		{
+			"matchManagers": ["bun"],
+			"matchDepTypes": ["dependencies"],
+			"matchUpdateTypes": ["minor", "patch"],
+			"groupName": "production dependencies",
+			"automerge": true,
+			"labels": ["dependencies", "automerge"]
+		},
+		{
+			"matchManagers": ["bun"],
+			"matchDepTypes": ["devDependencies"],
+			"matchUpdateTypes": ["minor", "patch"],
+			"groupName": "dev dependencies",
+			"automerge": true,
+			"labels": ["dependencies", "automerge"]
+		},
+		{
+			"matchManagers": ["dockerfile", "docker-compose"],
+			"matchUpdateTypes": ["minor", "patch"],
+			"groupName": "Docker dependencies",
+			"automerge": true,
+			"labels": ["dependencies", "docker", "automerge"]
+		},
+		{
+			"matchManagers": ["github-actions"],
+			"matchUpdateTypes": ["minor", "patch"],
+			"groupName": "CI dependencies",
+			"automerge": true,
+			"labels": ["dependencies", "automerge"]
+		}
+	]
+}

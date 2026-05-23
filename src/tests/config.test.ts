@@ -129,6 +129,18 @@ describe("Configuration", () => {
 		});
 	});
 
+	describe("Feature flags", () => {
+		test("should have FEATURE_TIPS defined as boolean", () => {
+			expect(CONFIG.FEATURE_TIPS).toBeDefined();
+			expect(typeof CONFIG.FEATURE_TIPS).toBe("boolean");
+		});
+
+		test("should have FEATURE_WARNINGS defined as boolean", () => {
+			expect(CONFIG.FEATURE_WARNINGS).toBeDefined();
+			expect(typeof CONFIG.FEATURE_WARNINGS).toBe("boolean");
+		});
+	});
+
 	describe("Configuration immutability", () => {
 		test("should not be modifiable", () => {
 			expect(() => {

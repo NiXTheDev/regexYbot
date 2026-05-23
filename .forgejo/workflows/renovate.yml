@@ -1,0 +1,23 @@
+name: Renovate Dependency Updates
+
+on:
+  schedule:
+    - cron: "0 7 * * 1" # Monday 10:00 UTC+3
+  workflow_dispatch:
+
+concurrency:
+  group: renovate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Renovate
+        uses: docker://data.forgejo.org/renovatebot/renovate:full
+        env:
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          GITHUB_COM_TOKEN: ${{ secrets.GH_COM_TOKEN }}

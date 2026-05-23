@@ -1,0 +1,175 @@
+name: Push Checks
+
+on:
+  push:
+    branches: [release, dev, "0.*"]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    container: oven/bun:1.3.14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: bun install -d
+
+      - name: Run lint
+        run: bun run lint
+
+  format:
+    name: Format Check
+    runs-on: ubuntu-latest
+    container: oven/bun:1.3.14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: bun install -d
+
+      - name: Check format
+        run: bun run fmt:check
+
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    container: oven/bun:1.3.14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: bun install -d
+
+      - name: Run type check
+        run: bun run typecheck
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    container: oven/bun:1.3.14
+    needs: [lint, format, typecheck]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: bun install -d
+
+      - name: Run tests
+        run: export TOKEN=${{ secrets.TG_BOT_TOKEN }}; bun test --retry=5 --only-failures --parallel
+
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(grep '"version"' package.json 2>/dev/null | head -1 | cut -d '"' -f 4 || echo "latest")
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          BRANCH='${{ github.ref_name }}'
+          echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
+
+      - name: Generate tags
+        id: tags
+        run: |
+          VERSION='${{ steps.version.outputs.version }}'
+          BRANCH='${{ steps.version.outputs.branch }}'
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+
+          FORGEJO_REGISTRY="hangar.nixthedev.ru/${REPO_LOWER}"
+          DOCKER_REGISTRY="docker.io/${REPO_LOWER}"
+          GHCR_REGISTRY="ghcr.io/${REPO_LOWER}"
+
+          echo "Version: $VERSION"
+          echo "Branch: $BRANCH"
+
+          # Build suffix list based on branch
+          if [ "$BRANCH" = "release" ]; then
+            echo "Building for release branch (stable release)"
+            SUFFIXES="latest,release"
+            if [ "$VERSION" != "latest" ]; then
+              SUFFIXES="${SUFFIXES},${VERSION}"
+              CURRENT="$VERSION"
+              while true; do
+                PREV="$CURRENT"
+                CURRENT=$(echo "$CURRENT" | sed 's/\.[^.]*$//')
+                if [ "$CURRENT" = "$PREV" ] || [ -z "$CURRENT" ]; then break; fi
+                SUFFIXES="${SUFFIXES},${CURRENT}"
+              done
+            fi
+          else
+            echo "Building for non-release branch: $BRANCH"
+            SUFFIXES="dev,latest"
+            if [ "$VERSION" != "latest" ]; then
+              CURRENT="$VERSION"
+              while true; do
+                SUFFIXES="${SUFFIXES},${CURRENT}-dev"
+                PREV="$CURRENT"
+                CURRENT=$(echo "$CURRENT" | sed 's/\.[^.]*$//')
+                if [ "$CURRENT" = "$PREV" ] || [ -z "$CURRENT" ]; then break; fi
+              done
+            fi
+          fi
+
+          # Apply suffixes to all registries
+          TAGS=""
+          IFS=','
+          for REG in "$FORGEJO_REGISTRY" "$DOCKER_REGISTRY" "$GHCR_REGISTRY"; do
+            for SUFFIX in $SUFFIXES; do
+              TAGS="${TAGS},${REG}:${SUFFIX}"
+            done
+          done
+          unset IFS
+          TAGS="${TAGS#,}"
+
+          echo "Tags: $TAGS"
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+
+      - name: Install Docker CLI
+        run: |
+          curl -fsSL "https://download.docker.com/linux/static/stable/$(uname -m)/docker-28.0.4.tgz" | tar xz -C /usr/local/bin --strip-components=1 docker/docker
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to Forgejo Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: hangar.nixthedev.ru
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.HGPR_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build and push to Forgejo Container Registry
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+#          cache-from: type=gha
+#          cache-to: type=gha,mode=max

@@ -163,12 +163,12 @@ docker stop -t 2 test-bot  # Only 2 seconds grace period
 
 The GitHub Actions workflows include:
 
-1. **PR Checks** (`.github/workflows/pr-checks.yml`):
+1. **PR Checks** (`.forgejo/workflows/pr-checks.yml`):
    - Lint, format, typecheck
    - Unit tests
    - Docker build validation
 
-2. **Push Checks** (`.github/workflows/push-checks.yml`):
+2. **Push Checks** (`.forgejo/workflows/push-checks.yml`):
    - Full test suite
    - Docker image build and push
 

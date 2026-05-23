@@ -160,7 +160,9 @@ export class SedHandler {
 					);
 					// Show warning but continue execution
 					const warning = formatDangerousPatternWarning(dangerCheck);
-					await ctx.reply(warning, { parse_mode: "Markdown" });
+					if (CONFIG.FEATURE_WARNINGS) {
+						await ctx.reply(warning, { parse_mode: "Markdown" });
+					}
 				}
 			}
 
@@ -271,18 +273,20 @@ export class SedHandler {
 		}
 
 		// Show optimization tip if applicable (max one per chain)
-		if (ctx.from?.id) {
-			const userId = ctx.from.id;
-			for (const commandString of sedCommands.slice(0, MAX_CHAIN_LENGTH)) {
-				const match = commandString.match(SED_PATTERN);
-				if (!match) continue;
+		if (CONFIG.FEATURE_TIPS) {
+			if (ctx.from?.id) {
+				const userId = ctx.from.id;
+				for (const commandString of sedCommands.slice(0, MAX_CHAIN_LENGTH)) {
+					const match = commandString.match(SED_PATTERN);
+					if (!match) continue;
 
-				const pattern = match[1].replace(/\\\//g, "/");
-				const tip = getBestTip(pattern, userId);
+					const pattern = match[1].replace(/\\\//g, "/");
+					const tip = getBestTip(pattern, userId);
 
-				if (tip) {
-					await sendTransientTip(ctx, tip);
-					break; // Only show one tip per chain
+					if (tip) {
+						await sendTransientTip(ctx, tip);
+						break; // Only show one tip per chain
+					}
 				}
 			}
 		}

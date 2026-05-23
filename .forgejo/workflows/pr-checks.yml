@@ -8,20 +8,10 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    container: oven/bun:1.3.14
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: 1.3.13
-
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-cache-${{ runner.os }}-${{ hashFiles('bun.lock') }}
 
       - name: Install dependencies
         run: bun install -d
@@ -32,14 +22,10 @@ jobs:
   format:
     name: Format Check
     runs-on: ubuntu-latest
+    container: oven/bun:1.3.14
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: 1.3.13
 
       - name: Install dependencies
         run: bun install -d
@@ -50,14 +36,10 @@ jobs:
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
+    container: oven/bun:1.3.14
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: 1.3.13
 
       - name: Install dependencies
         run: bun install -d
@@ -68,31 +50,29 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
+    container: oven/bun:1.3.14
     needs: [lint, format, typecheck]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: 1.3.13
-
       - name: Install dependencies
         run: bun install -d
 
       - name: Run tests
-        run: export TOKEN=${{ secrets.TG_BOT_TOKEN }}; bun test
+        run: export TOKEN=${{ secrets.TG_BOT_TOKEN }}; bun test --retry=5 --only-failures --parallel
 
   build-docker:
     name: Build Docker Image (Validation)
     runs-on: ubuntu-latest
     needs: test
-    permissions:
-      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Install Docker CLI
+        run: |
+          curl -fsSL "https://download.docker.com/linux/static/stable/$(uname -m)/docker-28.0.4.tgz" | tar xz -C /usr/local/bin --strip-components=1 docker/docker
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

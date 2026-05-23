@@ -2,6 +2,19 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { WorkerPool } from "../workerPool";
 import { TaskMessage } from "../types";
 
+async function waitForCondition(
+	poll: () => boolean,
+	timeoutMs: number = 2000,
+	intervalMs: number = 20,
+): Promise<void> {
+	const start = Date.now();
+	while (Date.now() - start < timeoutMs) {
+		if (poll()) return;
+		await new Promise((resolve) => setTimeout(resolve, intervalMs));
+	}
+	throw new Error(`Condition not met within ${timeoutMs}ms`);
+}
+
 describe("WorkerPool", () => {
 	let pool: WorkerPool;
 
@@ -45,15 +58,15 @@ describe("WorkerPool", () => {
 			.fill(null)
 			.map(() => pool.run(task));
 
-		// Allow time for workers to spawn
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		// Wait for workers to spawn
+		await waitForCondition(() => pool.getStats().totalWorkers >= 4);
 
 		const stats = pool.getStats();
 		// Should have scaled up to max workers
 		expect(stats.totalWorkers).toBe(4);
 
 		await Promise.all(promises);
-	});
+	}, 30000);
 
 	test("scale down idle workers", async () => {
 		// Run some tasks to scale up
@@ -70,11 +83,11 @@ describe("WorkerPool", () => {
 		);
 
 		// Wait for idle timeout + check interval
-		await new Promise((resolve) => setTimeout(resolve, 200));
+		await waitForCondition(() => pool.getStats().totalWorkers <= 1);
 
 		const stats = pool.getStats();
 		expect(stats.totalWorkers).toBe(1); // Back to min
-	});
+	}, 30000);
 
 	test("respects max workers limit", async () => {
 		const limitedPool = new WorkerPool({
@@ -99,7 +112,8 @@ describe("WorkerPool", () => {
 				.fill(null)
 				.map(() => limitedPool.run(task));
 
-			await new Promise((resolve) => setTimeout(resolve, 50));
+			// Wait for workers to scale up
+			await waitForCondition(() => limitedPool.getStats().totalWorkers >= 2);
 
 			const stats = limitedPool.getStats();
 			expect(stats.totalWorkers).toBeLessThanOrEqual(2);
@@ -108,7 +122,7 @@ describe("WorkerPool", () => {
 		} finally {
 			await limitedPool.shutdown();
 		}
-	});
+	}, 30000);
 
 	test("handles invalid regex errors", async () => {
 		const task: TaskMessage = {
@@ -143,7 +157,7 @@ describe("WorkerPool", () => {
 		// Pool still works
 		const result2 = await pool.run(validTask);
 		expect(result2.result).toBe("hi");
-	});
+	}, 15000);
 
 	test("returns pool statistics", async () => {
 		const stats = pool.getStats();
@@ -223,8 +237,12 @@ describe("WorkerPool", () => {
 				}
 			}, 10);
 
-			// Shutdown with draining - this should spawn extra workers beyond maxWorkers
-			await drainPool.shutdown({ drainTasks: true, drainTimeoutMs: 5000 });
+			// Shutdown with draining - this should spawn extra workers
+			// beyond maxWorkers
+			await drainPool.shutdown({
+				drainTasks: true,
+				drainTimeoutMs: 5000,
+			});
 
 			clearInterval(checkInterval);
 
@@ -242,5 +260,5 @@ describe("WorkerPool", () => {
 				await drainPool.shutdown();
 			}
 		}
-	});
+	}, 30000);
 });

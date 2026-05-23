@@ -1,0 +1,77 @@
+name: Security Audit
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday at 9 AM UTC
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+    container: oven/bun:1.3.14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run security audit
+        id: audit
+        continue-on-error: true
+        run: |
+          set +e
+          AUDIT_OUTPUT=$(BUN_INSTALL_SECURITY=@bun-security-scanner/osv bun install -d 2>&1)
+          AUDIT_EXIT=$?
+          echo "$AUDIT_OUTPUT" > audit_output.txt
+          echo "AUDIT_EXIT=${AUDIT_EXIT}" >> $GITHUB_ENV
+          if [ $AUDIT_EXIT -ne 0 ]; then
+            echo "Audit found vulnerabilities or errors (exit code: $AUDIT_EXIT)"
+          else
+            echo "Audit passed - no vulnerabilities found"
+          fi
+
+      - name: Create issue for vulnerabilities
+        if: env.AUDIT_EXIT != 0
+        shell: bash
+        run: |
+          AUDIT_OUTPUT=$(cat audit_output.txt)
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          TODAY=$(date -u +"%Y-%m-%d")
+
+          # Check if an issue already exists for today
+          EXISTING_ISSUES=$(curl -s "https://hangar.nixthedev.ru/api/v1/repos/${{ github.repository }}/issues?state=open&created_by=${{ github.repository_owner }}" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}")
+
+          EXISTING_ID=$(echo "$EXISTING_ISSUES" | python3 -c "
+          import sys, json
+          issues = json.load(sys.stdin)
+          today = '$TODAY'
+          for issue in issues:
+              if 'Security Audit' in issue.get('title', '') and issue.get('created_at', '').startswith(today):
+                  print(issue['number'])
+                  break
+          ")
+
+          BODY="## Security Audit Report\n\n**Date:** $TIMESTAMP\n\n### Audit Output\n\`\`\`\n$AUDIT_OUTPUT\n\`\`\`\n\n### Recommended Actions\n- Review the vulnerabilities above\n- Update affected packages using \`bun update\`\n- Run \`bun pm audit fix\` if available\n\nThis issue will be updated if new vulnerabilities are found. Close it after resolving all security issues."
+
+          # Escape for JSON
+          BODY_JSON=$(python3 -c "import json; print(json.dumps('''$BODY'''))")
+
+          if [ -n "$EXISTING_ID" ]; then
+            # Update existing issue
+            curl -X PATCH "https://hangar.nixthedev.ru/api/v1/repos/${{ github.repository }}/issues/$EXISTING_ID" \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d "{\"body\": $BODY_JSON}"
+            echo "Updated existing issue #$EXISTING_ID"
+          else
+            # Create new issue
+            curl -X POST "https://hangar.nixthedev.ru/api/v1/repos/${{ github.repository }}/issues" \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"title\": \"Security Audit: Vulnerabilities Detected - $TIMESTAMP\",
+                \"body\": $BODY_JSON,
+                \"labels\": [\"security\", \"audit\"]
+              }"
+            echo "Created new issue"
+          fi

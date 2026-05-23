@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 
 <details open>
+<summary><b>[0.2.1.1] - 2026-05-22</b></summary>
+
+### Feature Toggles via Environment Variables
+
+- **FEATURE_TIPS**: Enable/disable regex optimization tips (default: true)
+  - Controls whether optimization suggestions like `[0-9] → \d` are shown to users
+  - Tips auto-delete after 10 seconds to avoid chat clutter
+- **FEATURE_WARNINGS**: Enable/disable dangerous pattern warnings (default: true)
+  - Controls whether ReDoS risk warnings with complexity scores are shown
+  - Internal logging and analysis still run regardless of toggle state
+
+</details>
+
+<details>
 <summary><b>[0.2.1] - 2026-04-28</b></summary>
 
 ### Diff Command Argument Support

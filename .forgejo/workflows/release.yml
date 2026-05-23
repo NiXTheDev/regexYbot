@@ -1,0 +1,193 @@
+name: Create Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [release]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g., 0.1.0). Leave empty to use package.json"
+        required: false
+        type: string
+      tag_name:
+        description: "Git tag (e.g., v0.1.0). Leave empty to derive from version"
+        required: false
+        type: string
+      pr_number:
+        description: "PR number to comment on (optional)"
+        required: false
+        type: string
+
+jobs:
+  create-release:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release'))
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create_forgejo_release.outputs.release_id }}
+      tag: ${{ steps.get_version.outputs.tag }}
+      version: ${{ steps.get_version.outputs.version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from inputs or package.json
+        id: get_version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=$(jq -r '.version' package.json)
+          fi
+
+          if [ -n "${{ inputs.tag_name }}" ]; then
+            TAG="${{ inputs.tag_name }}"
+          else
+            TAG="v$VERSION"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Releasing version: $VERSION (tag: $TAG)"
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git rev-parse "${{ steps.get_version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag already exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag does not exist"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Git Tag
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          git config user.name "Forgejo Actions"
+          git config user.email "actions@forgejo"
+          git tag -a "${{ steps.get_version.outputs.tag }}" -m "Release ${{ steps.get_version.outputs.tag }}"
+          git push origin "${{ steps.get_version.outputs.tag }}"
+
+      - name: Extract changelog section
+        id: extract_changelog
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          CHANGELOG_SECTION=$(sed -n "/^<summary><b>\[$VERSION\]/,/^<\/details>/p" CHANGELOG.md | sed 's/<details[^>]*>//g; s/<\/details>//g; s/<summary>//g; s/<\/summary>//g')
+
+          if [ -z "$CHANGELOG_SECTION" ]; then
+            CHANGELOG_SECTION="See [CHANGELOG.md](https://hangar.nixthedev.ru/${{ github.repository }}/src/branch/main/CHANGELOG.md) for full release notes."
+          fi
+
+          echo "$CHANGELOG_SECTION" > /tmp/release_notes.md
+
+          echo "" >> /tmp/release_notes.md
+          echo "## Binary Downloads" >> /tmp/release_notes.md
+          echo "" >> /tmp/release_notes.md
+          echo "- **Linux (x64)**: Download \`regexybot-linux-x64.tar.gz\` below" >> /tmp/release_notes.md
+          echo "- **Windows (x64)**: Download \`regexybot-windows-x64.zip\` below" >> /tmp/release_notes.md
+          echo "" >> /tmp/release_notes.md
+          echo "### Binary Installation" >> /tmp/release_notes.md
+          echo "" >> /tmp/release_notes.md
+          echo "**Linux:**" >> /tmp/release_notes.md
+          echo '```bash' >> /tmp/release_notes.md
+          echo "tar -xzf regexybot-linux-x64.tar.gz" >> /tmp/release_notes.md
+          echo "TOKEN=your_token_here ./regexybot-linux-x64" >> /tmp/release_notes.md
+          echo '```' >> /tmp/release_notes.md
+          echo "" >> /tmp/release_notes.md
+          echo "**Windows:**" >> /tmp/release_notes.md
+          echo '```powershell' >> /tmp/release_notes.md
+          echo "Expand-Archive regexybot-windows-x64.zip" >> /tmp/release_notes.md
+          echo "set TOKEN=your_token_here" >> /tmp/release_notes.md
+          echo ".\regexybot-windows-x64.exe" >> /tmp/release_notes.md
+          echo '```' >> /tmp/release_notes.md
+
+      - name: Create Forgejo Release
+        id: create_forgejo_release
+        run: |
+          RELEASE_RESPONSE=$(curl -s -X POST "https://hangar.nixthedev.ru/api/v1/repos/${{ github.repository }}/releases" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg tag "${{ steps.get_version.outputs.tag }}" \
+              --arg name "Release ${{ steps.get_version.outputs.tag }}" \
+              --rawfile body /tmp/release_notes.md \
+              '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: false}')")
+
+          RELEASE_ID=$(echo "$RELEASE_RESPONSE" | jq -r '.id')
+          echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
+          echo "Created release with ID: $RELEASE_ID"
+
+      - name: Comment on PR
+        if: inputs.pr_number != '' || github.event.pull_request.number != ''
+        run: |
+          PR_NUMBER="${{ inputs.pr_number != '' && inputs.pr_number || github.event.pull_request.number || '' }}"
+          curl -s -X POST "https://hangar.nixthedev.ru/api/v1/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg tag "${{ steps.get_version.outputs.tag }}" \
+              '{"body": "🎉 Release **\($tag)** has been created!\n\n📦 Release URL: https://hangar.nixthedev.ru/${{ github.repository }}/releases/tag/\($tag)\n\n📥 Binaries available for Linux (x64) and Windows (x64)"}')"
+
+  build-binaries:
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.os == 'ubuntu-latest' && 'oven/bun:1.3.14' || '' }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+            output: regexybot-linux-x64
+          - os: windows-latest
+            target: windows-x64
+            output: regexybot-windows-x64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $url = "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-windows-x64.zip"
+          $output = "bun.zip"
+          Invoke-WebRequest -Uri $url -OutFile $output
+          Expand-Archive -Path $output -DestinationPath "."
+          echo "$pwd/bun-windows-x64" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install dependencies
+        run: bun install --production
+
+      - name: Build binary (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          bun build --compile --target=bun-linux-x64 ./src/index.ts --outfile ${{ matrix.output }}
+          chmod +x ${{ matrix.output }}
+          tar -czf ${{ matrix.output }}.tar.gz ${{ matrix.output }}
+
+      - name: Build binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          bun build --compile --target=bun-windows-x64 ./src/index.ts --outfile ${{ matrix.output }}.exe
+          Compress-Archive -Path ${{ matrix.output }}.exe -DestinationPath ${{ matrix.output }}.zip
+
+      - name: Upload asset to release (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          curl -s -X POST "https://hangar.nixthedev.ru/api/v1/repos/${{ github.repository }}/releases/${{ needs.create-release.outputs.release_id }}/assets" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -F "attachment=@${{ matrix.output }}.tar.gz"
+
+      - name: Upload asset to release (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          curl.exe -s -X POST "https://hangar.nixthedev.ru/api/v1/repos/${{ github.repository }}/releases/${{ needs.create-release.outputs.release_id }}/assets" `
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" `
+            -F "attachment=@${{ matrix.output }}.zip"

@@ -70,6 +70,10 @@ export interface BotConfig {
 	readonly ENABLE_FILE_HEALTHCHECK: boolean;
 	readonly LIVENESS_FILE: string;
 	readonly LIVENESS_INTERVAL_MS: number;
+
+	// Feature Toggles
+	readonly FEATURE_TIPS: boolean;
+	readonly FEATURE_WARNINGS: boolean;
 }
 
 /**
@@ -279,6 +283,10 @@ function loadConfig(): BotConfig {
 			5000,
 			300000,
 		),
+
+		// Feature Toggles
+		FEATURE_TIPS: parseBoolEnv("FEATURE_TIPS", true),
+		FEATURE_WARNINGS: parseBoolEnv("FEATURE_WARNINGS", true),
 	};
 
 	// Log configuration summary (only in non-production to avoid leaking sensitive data)

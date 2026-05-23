@@ -96,6 +96,8 @@ Configure the bot's behavior with the following environment variables:
 | `ENABLE_FILE_HEALTHCHECK`            |    No    | Enable file-based healthcheck for Docker environments.                                                    | `false`                                      |
 | `LIVENESS_FILE`                      |    No    | Path to the liveness file when healthcheck is enabled.                                                    | `/tmp/bot-alive`                             |
 | `LIVENESS_INTERVAL_MS`               |    No    | How often to update the liveness file (milliseconds).                                                     | 30000                                        |
+| `FEATURE_TIPS`                       |    No    | Enable regex optimization tips shown after substitutions.                                                 | `true`                                       |
+| `FEATURE_WARNINGS`                   |    No    | Enable dangerous pattern (ReDoS) warnings.                                                                | `true`                                       |
 
 ## Quick Start (Binary)
 
