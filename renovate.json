@@ -2,11 +2,18 @@
 	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
 	"platform": "forgejo",
 	"endpoint": "https://hangar.nixthedev.ru/api/v1/",
-	"onboarding": true,
+	"onboarding": false,
 	"extends": [
 		"config:recommended",
 		":disableDependencyDashboard",
 		"group:monorepos"
+	],
+	"hostRules": [
+		{
+			"hostType": "forgejo",
+			"matchHost": "hangar.nixthedev.ru",
+			"token": "{RENOVATE_TOKEN}"
+		}
 	],
 	"baseBranches": ["dev"],
 	"schedule": ["on Monday at 10:00"],

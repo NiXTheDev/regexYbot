@@ -17,7 +17,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Renovate
-        uses: docker://data.forgejo.org/renovatebot/renovate:full
+        uses: docker://docker.io/renovate/renovate:full
         env:
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
-          GITHUB_COM_TOKEN: ${{ secrets.GH_COM_TOKEN }}
+          #GITHUB_COM_TOKEN: ${{ secrets.GH_COM_TOKEN }}
+          LOG_LEVEL: "debug"

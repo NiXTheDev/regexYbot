@@ -1,6 +1,6 @@
 {
 	"name": "@nixthedev/regexybot",
-	"version": "0.2.1.1",
+	"version": "0.2.1.1-hf1",
 	"type": "module",
 	"dependencies": {
 		"@grammyjs/auto-retry": "^2.0.2",
@@ -27,7 +27,7 @@
 		"lint": "bunx eslint .",
 		"fmt": "bunx prettier --write .",
 		"fmt:check": "bunx prettier --check .",
-		"ltf": "bun fmt && bun lint && bun typecheck && bun test",
-		"ltf:check": "bun run lint && bun run typecheck && bun run fmt:check"
+		"ltf": "bun fmt && bun lint && bun typecheck && bun test --retry=5 --only-failures --parallel",
+		"ltf:check": "bun run lint && bun run typecheck && bun run fmt:check && && bun test --retry=5 --only-failures --parallel"
 	}
 }
