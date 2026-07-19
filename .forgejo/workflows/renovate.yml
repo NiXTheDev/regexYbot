@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: https://hangar.nixthedev.ru/actions/checkout@v4
 
       - name: Run Renovate
         uses: docker://docker.io/renovate/renovate:full
