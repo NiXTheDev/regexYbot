@@ -19,6 +19,7 @@ jobs:
         continue-on-error: true
         run: |
           set +e
+          apk add --no-cache jq curl
           AUDIT_OUTPUT=$(BUN_INSTALL_SECURITY=@bun-security-scanner/osv bun install -d 2>&1)
           AUDIT_EXIT=$?
           echo "$AUDIT_OUTPUT" > audit_output.txt
@@ -41,20 +42,13 @@ jobs:
           EXISTING_ISSUES=$(curl -s "https://hangar.nixthedev.ru/api/v1/repos/${{ github.repository }}/issues?state=open&created_by=${{ github.repository_owner }}" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}")
 
-          EXISTING_ID=$(echo "$EXISTING_ISSUES" | python3 -c "
-          import sys, json
-          issues = json.load(sys.stdin)
-          today = '$TODAY'
-          for issue in issues:
-              if 'Security Audit' in issue.get('title', '') and issue.get('created_at', '').startswith(today):
-                  print(issue['number'])
-                  break
-          ")
+          echo "$EXISTING_ISSUES" > /tmp/issues.json
+          EXISTING_ID=$(echo "$EXISTING_ISSUES" | jq -r --arg today "$TODAY" '.[] | select(.title | contains("Security Audit")) | select(.created_at | startswith($today)) | .number' | head -1)
 
           BODY="## Security Audit Report\n\n**Date:** $TIMESTAMP\n\n### Audit Output\n\`\`\`\n$AUDIT_OUTPUT\n\`\`\`\n\n### Recommended Actions\n- Review the vulnerabilities above\n- Update affected packages using \`bun update\`\n- Run \`bun pm audit fix\` if available\n\nThis issue will be updated if new vulnerabilities are found. Close it after resolving all security issues."
 
           # Escape for JSON
-          BODY_JSON=$(python3 -c "import json; print(json.dumps('''$BODY'''))")
+          BODY_JSON=$(echo "$BODY" | jq -Rs '.')
 
           if [ -n "$EXISTING_ID" ]; then
             # Update existing issue

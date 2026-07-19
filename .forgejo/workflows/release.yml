@@ -39,6 +39,7 @@ jobs:
       - name: Get version from inputs or package.json
         id: get_version
         run: |
+          apk add --no-cache jq
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
           else
@@ -110,14 +111,12 @@ jobs:
       - name: Create Forgejo Release
         id: create_forgejo_release
         run: |
+          RELEASE_BODY=$(cat /tmp/release_notes.md)
+          RELEASE_JSON=$(jq -n --arg tag "${{ steps.get_version.outputs.tag }}" --arg name "Release ${{ steps.get_version.outputs.tag }}" --arg body "$RELEASE_BODY" '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: false}')
           RELEASE_RESPONSE=$(curl -s -X POST "https://hangar.nixthedev.ru/api/v1/repos/${{ github.repository }}/releases" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "$(jq -n \
-              --arg tag "${{ steps.get_version.outputs.tag }}" \
-              --arg name "Release ${{ steps.get_version.outputs.tag }}" \
-              --rawfile body /tmp/release_notes.md \
-              '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: false}')")
+            -d "$RELEASE_JSON")
 
           RELEASE_ID=$(echo "$RELEASE_RESPONSE" | jq -r '.id')
           echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
@@ -127,11 +126,12 @@ jobs:
         if: inputs.pr_number != '' || github.event.pull_request.number != ''
         run: |
           PR_NUMBER="${{ inputs.pr_number != '' && inputs.pr_number || github.event.pull_request.number || '' }}"
+          TAG="${{ steps.get_version.outputs.tag }}"
+          COMMENT_BODY=$(jq -n --arg tag "$TAG" --arg repo "${{ github.repository }}" '{body: ("🎉 Release **" + $tag + "** has been created!\n\n📦 Release URL: https://hangar.nixthedev.ru/" + $repo + "/releases/tag/" + $tag + "\n\n📥 Binaries available for Linux (x64) and Windows (x64)")}')
           curl -s -X POST "https://hangar.nixthedev.ru/api/v1/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "$(jq -n --arg tag "${{ steps.get_version.outputs.tag }}" \
-              '{"body": "🎉 Release **\($tag)** has been created!\n\n📦 Release URL: https://hangar.nixthedev.ru/${{ github.repository }}/releases/tag/\($tag)\n\n📥 Binaries available for Linux (x64) and Windows (x64)"}')"
+            -d "$COMMENT_BODY"
 
   build-binaries:
     needs: create-release
