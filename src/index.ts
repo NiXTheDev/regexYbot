@@ -669,7 +669,7 @@ myCommands.command(
 		}
 	},
 );
-// bot.use(myCommands) is already registered above
+bot.use(myCommands);
 
 // --- Callback Query Handler for Regex Help ---
 bot.on("callback_query:data", async (ctx) => {
