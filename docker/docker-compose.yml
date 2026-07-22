@@ -1,6 +1,6 @@
 services:
   regexybot:
-    image: ghcr.io/nixthedev/regexybot:release # release for stable builds, dev for live updates as they are pushed, dev may be broken and not work
+    image: hangar.nixthedev.ru/nixthedev/regexybot:release # release for stable builds, dev for live updates as they are pushed, dev may be broken and not work
     container_name: regexybot
     restart: unless-stopped
     stop_grace_period: 1m

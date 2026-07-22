@@ -2,11 +2,6 @@
 
 A fast, efficient, and feature-rich Telegram bot built with [grammY](https://github.com/grammyjs/grammy), [Bun](https://bun.sh/), and [SQLite](https://www.sqlite.org/). It provides powerful regex-based substitution (`sed` style) with a focus on performance, scalability, and robust error handling.
 
-> [!IMPORTANT]
-> This project is going to soon be moved to a self-hosted Forgejo instance
-> Currently it will act as a push-mirror, and in the future, github will be the push-mirror
-> The repository is already available at: https://hangar.nixthedev.ru/NiXTheDev/regexYbot
-
 ## Features
 
 - **Sed-Style Substitution:** Use `s/pattern/replacement/flags` commands to perform regex substitutions on messages within the chat history or on specific replies.
@@ -103,7 +98,7 @@ Configure the bot's behavior with the following environment variables:
 
 Pre-built binaries are available for Linux and Windows:
 
-1. **Download** the latest release from [GitHub Releases](https://github.com/NiXTheDev/regexYbot/releases)
+1. **Download** the latest release from [Hangar Releases](https://hangar.nixthedev.ru/NiXTheDev/regexYbot/releases)
    - Linux: `regexybot-linux-x64.tar.gz`
    - Windows: `regexybot-windows-x64.zip`
 

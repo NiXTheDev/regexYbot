@@ -152,6 +152,6 @@ fails if the file hasn't been updated in 60 seconds.
 To build your own image with specific healthcheck enabled by default:
 
 ```dockerfile
-FROM ghcr.io/nixthedev/regexybot:latest
+FROM hangar.nixthedev.ru/nixthedev/regexybot:latest
 ENV ENABLE_FILE_HEALTHCHECK=true
 ```

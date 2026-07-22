@@ -161,7 +161,10 @@ export class SedHandler {
 					// Show warning but continue execution
 					const warning = formatDangerousPatternWarning(dangerCheck);
 					if (CONFIG.FEATURE_WARNINGS) {
-						await ctx.reply(warning, { parse_mode: "Markdown" });
+						await ctx.reply(warning, {
+							parse_mode: "Markdown",
+							receiver_user_id: ctx.from?.id,
+						});
 					}
 				}
 			}
@@ -281,7 +284,7 @@ export class SedHandler {
 					if (!match) continue;
 
 					const pattern = match[1].replace(/\\\//g, "/");
-					const tip = getBestTip(pattern, userId);
+					const tip = getBestTip(pattern, userId, match[2]);
 
 					if (tip) {
 						await sendTransientTip(ctx, tip);

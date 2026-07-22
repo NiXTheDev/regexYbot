@@ -80,19 +80,30 @@ jobs:
       - name: Set up Docker Buildx
         uses: https://hangar.nixthedev.ru/docker/setup-buildx-action@v3
 
+      - name: Login to Forgejo Container Registry
+        uses: https://hangar.nixthedev.ru/docker/login-action@v3
+        with:
+          registry: hangar.nixthedev.ru
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.HGPR_TOKEN }}
+
+      - name: Lowercase repository name
+        id: repo
+        run: echo "name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Generate tag
         id: tag
         run: |
-          REPO='${{ github.repository }}'
-          REPO=$(echo "$REPO" | tr '[:upper:]' '[:lower:]')
-          TAG="ghcr.io/${REPO}:pr-${{ github.event.pull_request.number }}"
+          TAG="ghcr.io/${{ steps.repo.outputs.name }}:pr-${{ github.event.pull_request.number }}"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
       - name: Build Docker image (validation only)
-        uses: https://hangar.nixthedev.ru/docker/build-push-action@v5
+        uses: https://hangar.nixthedev.ru/docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: false
           load: false
           tags: ${{ steps.tag.outputs.tag }}
+          cache-from: type=registry,ref=hangar.nixthedev.ru/${{ steps.repo.outputs.name }}:buildcache
+          cache-to: type=registry,ref=hangar.nixthedev.ru/${{ steps.repo.outputs.name }}:buildcache,mode=max

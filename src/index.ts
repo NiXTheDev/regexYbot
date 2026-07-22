@@ -559,8 +559,7 @@ myCommands.command(
 	async (ctx) => {
 		// Parse format argument from command
 		const formatArg = (ctx.match as string)?.trim().toLowerCase() as
-			| DiffFormat
-			| undefined;
+			DiffFormat | undefined;
 		const format: DiffFormat =
 			formatArg && ["plain", "true", "image"].includes(formatArg)
 				? formatArg

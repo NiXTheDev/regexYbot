@@ -45,7 +45,10 @@ setInterval(
 /**
  * Analyze a regex pattern and return optimization tips
  */
-export function analyzePatternForTips(pattern: string): OptimizationTip[] {
+export function analyzePatternForTips(
+	pattern: string,
+	replacement?: string,
+): OptimizationTip[] {
 	const tips: OptimizationTip[] = [];
 
 	// Check for digit character class
@@ -81,12 +84,31 @@ export function analyzePatternForTips(pattern: string): OptimizationTip[] {
 	// Check for capturing groups that might not be needed
 	const capturingGroups = pattern.match(/\((?!\?)/g);
 	if (capturingGroups && capturingGroups.length >= 3) {
-		tips.push({
-			pattern: "multiple ( ) groups",
-			suggestion: "(?: ) for non-capturing",
-			reason: "faster if you don't need backreferences",
-			severity: "moderate",
-		});
+		let skipTip = false;
+		if (replacement) {
+			const refs = replacement.match(/\$(\d+)/g);
+			if (refs) {
+				const referencedGroups = new Set(
+					refs.map((r) => parseInt(r.slice(1), 10)),
+				);
+				let allReferenced = true;
+				for (let i = 1; i <= capturingGroups.length; i++) {
+					if (!referencedGroups.has(i)) {
+						allReferenced = false;
+						break;
+					}
+				}
+				skipTip = allReferenced;
+			}
+		}
+		if (!skipTip) {
+			tips.push({
+				pattern: "multiple ( ) groups",
+				suggestion: "(?: ) for non-capturing",
+				reason: "faster if you don't need backreferences",
+				severity: "moderate",
+			});
+		}
 	}
 
 	// Check for [\s\S] which can be replaced with . and s flag
@@ -102,14 +124,31 @@ export function analyzePatternForTips(pattern: string): OptimizationTip[] {
 	// Check for unnecessary escaping
 	const unnecessaryEscapes = pattern.match(/\\[a-zA-Z0-9]/g);
 	if (unnecessaryEscapes) {
-		const hasUnnecessary = unnecessaryEscapes.some(
-			(e) => !/\\[nrtdwDsWbB]/.test(e),
-		);
-		if (hasUnnecessary) {
+		const allowlistRegex = /\\[nrtdwDsWbBfvS]/;
+		const seen = new Set<string>();
+		for (const escape of unnecessaryEscapes) {
+			if (allowlistRegex.test(escape)) continue;
+			if (seen.has(escape)) continue;
+			seen.add(escape);
+
+			// Skip \S inside [\s\S] (safeguard; \S is already in the allowlist)
+			if (escape === "\\S") continue;
+
+			const char = escape[1];
+			let reason: string;
+			switch (escape) {
+				case "\\e":
+					reason = 'matches literal "e"';
+					break;
+				default:
+					reason = `matches literal "${char}"`;
+					break;
+			}
+
 			tips.push({
-				pattern: "\\X escaping",
-				suggestion: "remove unnecessary escapes",
-				reason: "cleaner pattern",
+				pattern: escape,
+				suggestion: "remove unnecessary escaping",
+				reason: `In JavaScript regex, ${escape} ${reason}`,
 				severity: "minor",
 			});
 		}
@@ -148,7 +187,7 @@ export function analyzePatternForTips(pattern: string): OptimizationTip[] {
  * Format a tip message
  */
 export function formatTip(tip: OptimizationTip): string {
-	return `💡 Tip: ${tip.pattern} → ${tip.suggestion} (${tip.reason})`;
+	return `> ${tip.pattern}\n- ${tip.suggestion} (${tip.reason})`;
 }
 
 /**
@@ -158,8 +197,9 @@ export function formatTip(tip: OptimizationTip): string {
 export function getBestTip(
 	pattern: string,
 	userId: number,
+	replacement?: string,
 ): OptimizationTip | null {
-	const tips = analyzePatternForTips(pattern);
+	const tips = analyzePatternForTips(pattern, replacement);
 
 	if (tips.length === 0) {
 		return null;
@@ -201,34 +241,31 @@ export function hasSignificantImprovement(pattern: string): boolean {
 }
 
 /**
- * Send a transient optimization tip
- * The message auto-deletes after 10 seconds
+ * Send an ephemeral optimization tip
+ * Uses receiver_user_id for privacy — only the sender sees it
  */
 export async function sendTransientTip(
 	ctx: {
-		reply: (text: string) => Promise<{ message_id: number }>;
 		api: {
-			deleteMessage: (chatId: number, messageId: number) => Promise<true>;
+			sendMessage: (
+				chatId: number,
+				text: string,
+				options?: { receiver_user_id?: number },
+			) => Promise<{ message_id: number }>;
 		};
 		chat?: { id: number };
+		from?: { id: number };
 	},
 	tip: OptimizationTip,
 ): Promise<void> {
 	const formattedTip = formatTip(tip);
 
 	try {
-		const sentMessage = await ctx.reply(formattedTip);
-
-		// Schedule deletion after 10 seconds
-		setTimeout(async () => {
-			try {
-				if (ctx.chat?.id) {
-					await ctx.api.deleteMessage(ctx.chat.id, sentMessage.message_id);
-				}
-			} catch {
-				// Ignore deletion errors (message might already be deleted)
-			}
-		}, 10000);
+		if (ctx.chat?.id && ctx.from?.id) {
+			await ctx.api.sendMessage(ctx.chat.id, formattedTip, {
+				receiver_user_id: ctx.from.id,
+			});
+		}
 	} catch (error) {
 		_logger.error(`Failed to send tip: ${error}`);
 	}

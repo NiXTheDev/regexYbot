@@ -5,3 +5,15 @@
 !/bun.lock
 
 /src/tests
+/.forgjo
+/.githooks
+/docker
+/node_modules
+/.editorconfig
+/.env.example
+/.prettier*
+/**.md
+/eslint.config.js
+/LICENSE
+/renovate.json
+/tsconfig.json

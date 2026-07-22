@@ -3,6 +3,34 @@
 All notable changes to this project will be documented in this file.
 
 <details open>
+<summary><b>[0.2.2] - 2026-07-20</b></summary>
+
+### grammY Upgrade
+
+- Upgraded grammY from v1.40.0 to v1.45.1 with updated plugin ecosystem
+
+### Rich Messages API
+
+- Migrated all bot messages from MarkdownV2 to Telegram's Rich Messages API
+  - Supports bold, italic, code, strikethrough, and block quotes natively
+- Removed `escapeForMarkdownV2AndBackslashes` utility — no longer needed
+
+### Ephemeral Messages
+
+- Optimization tips sent as ephemeral messages (visible only to regex author, auto-deleted after 10 seconds)
+- `/regexhelp` response is ephemeral with automatic cleanup when a new one is requested
+- `/explain` response is ephemeral
+- Dangerous pattern warnings are ephemeral to the regex author
+
+### Optimization Tips Fix
+
+- Fixed false positive: `\\`, `\S`, `\f`, `\v` no longer flagged as unnecessary escapes
+- Per-escape tips now provide specific pattern/reason instead of generic messages
+- Capturing groups warning suppressed when all groups are referenced in the replacement string
+
+</details>
+
+<details>
 <summary><b>[0.2.1.1] - 2026-05-22</b></summary>
 
 ### Feature Toggles via Environment Variables

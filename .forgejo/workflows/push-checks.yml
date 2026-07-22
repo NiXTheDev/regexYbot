@@ -164,12 +164,16 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GHCR_TOKEN }}
 
+      - name: Lowercase repository name
+        id: repo
+        run: echo "name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Build and push to Forgejo Container Registry
-        uses: https://hangar.nixthedev.ru/docker/build-push-action@v5
+        uses: https://hangar.nixthedev.ru/docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.tags.outputs.tags }}
-#          cache-from: type=gha
-#          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=hangar.nixthedev.ru/${{ steps.repo.outputs.name }}:buildcache
+          cache-to: type=registry,ref=hangar.nixthedev.ru/${{ steps.repo.outputs.name }}:buildcache,mode=max

@@ -3,9 +3,12 @@
  * Updated on each release
  */
 
-export const VERSION = "0.2.1.1";
-export const COMMIT = "feature-toggles";
-export const RELEASED_AT = "2026-05-22";
-export const CHANGES = `- Feature toggles via environment variables
-  - FEATURE_TIPS=true/false - Enable/disable regex optimization tips (default: true)
-  - FEATURE_WARNINGS=true/false - Enable/disable dangerous pattern warnings (default: true)`;
+export const VERSION = "0.2.2";
+export const COMMIT = "068161b";
+export const RELEASED_AT = "2026-07-20";
+export const CHANGES = `- grammY upgrade from v1.40.0 to v1.45.1
+- Rich Messages API (replaces MarkdownV2)
+- Ephemeral messages for tips, /regexhelp, /explain, warnings
+- Fixed optimization tips false positive (\\, \\S, \\f, \\v no longer flagged)
+- Per-escape tips with specific pattern/reason
+- Capturing groups warning suppressed when all groups used in replacement`;
