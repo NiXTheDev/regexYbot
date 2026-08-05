@@ -1,6 +1,6 @@
 {
 	"name": "@nixthedev/regexybot",
-	"version": "0.2.2.1",
+	"version": "0.2.2.1-hf1",
 	"type": "module",
 	"dependencies": {
 		"@grammyjs/auto-retry": "^2.0.2",
@@ -25,7 +25,7 @@
 		"main": "bun src/index.ts",
 		"generate": "bun run src/version.ts",
 		"build-win": "bun build --compile src/index.ts --windows-title=regexYbot --windows-description=\"regexbot, but better\" --windows-version=$(bun run src/version.ts version)",
-		"build-linux": "bun build --compile src/index.ts --define",
+		"build-linux": "bun build --compile src/index.ts",
 		"typecheck": "bun --bun tsc --noEmit",
 		"lint": "bunx eslint .",
 		"fmt": "bunx prettier --write .",

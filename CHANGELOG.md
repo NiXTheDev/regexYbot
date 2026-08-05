@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 
 <details open>
+<summary><b>[0.2.2.1-hf1] - 2026-08-05</b></summary>
+
+### Bug Fixes
+
+- Fixed broken `build-linux` script — removed stray `--define` fragment so CI's `--target`/`--outfile` args append correctly
+- Restored link preview preservation — bot replies now respect the source message's `link_preview_options` when present:
+  - `reply_to_message` path returns the replied-to message's `link_preview_options` in extras
+  - Edited messages store extras correctly (destructured from `ctx.editedMessage` when `isEdit`)
+  - When the source message has no preview options, the parameter is omitted (Telegram default behavior)
+
+</details>
+
+<details>
 <summary><b>[0.2.2.1] - 2026-07-30</b></summary>
 
 ### Version System

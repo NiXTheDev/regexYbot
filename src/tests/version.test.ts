@@ -26,8 +26,8 @@ describe("version", () => {
 			expect(CHANGES === null || typeof CHANGES === "string").toBe(true);
 		});
 
-		test("VERSION should match semver format (X.Y.Z or X.Y.Z.W)", () => {
-			expect(VERSION).toMatch(/^\d+\.\d+\.\d+(\.\d+)?$/);
+		test("VERSION should match semver format (X.Y.Z, X.Y.Z.W, or pre-release suffix)", () => {
+			expect(VERSION).toMatch(/^\d+\.\d+\.\d+(\.\d+)?(-[0-9A-Za-z.-]+)?$/);
 		});
 
 		test("VERSION should match package.json version", () => {
