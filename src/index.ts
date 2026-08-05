@@ -258,6 +258,7 @@ try {
       chat_id INTEGER NOT NULL,
       message_id INTEGER NOT NULL,
       text TEXT,
+      extras TEXT,
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (chat_id, message_id)
     )
@@ -308,6 +309,7 @@ async function sendOrEditReply(
 	targetMsgId: number,
 	messageText: string,
 	isEdit: boolean = false,
+	linkPreviewDisabled?: boolean,
 ): Promise<void> {
 	logger.debug(`Attempting to ${isEdit ? "edit" : "send"} a reply.`);
 	try {
@@ -322,7 +324,12 @@ async function sendOrEditReply(
 						ctx.chat!.id,
 						previousBotReplyId,
 						messageText,
-						{ parse_mode: "MarkdownV2" },
+						{
+							parse_mode: "MarkdownV2",
+							...(linkPreviewDisabled !== undefined
+								? { link_preview_options: { is_disabled: linkPreviewDisabled } }
+								: {}),
+						},
 					);
 					await dbService.storeBotReplyMapping(
 						targetMsgId,
@@ -351,6 +358,9 @@ async function sendOrEditReply(
 		const sentMsg = await ctx.api.sendMessage(ctx.chat!.id, messageText, {
 			reply_parameters: { message_id: targetMsgId },
 			parse_mode: "MarkdownV2",
+			...(linkPreviewDisabled !== undefined
+				? { link_preview_options: { is_disabled: linkPreviewDisabled } }
+				: {}),
 		});
 		await dbService.storeBotReplyMapping(
 			targetMsgId,
@@ -360,7 +370,7 @@ async function sendOrEditReply(
 		await dbService.storeBotReplyInHistory(
 			ctx.chat!.id,
 			sentMsg.message_id,
-			messageText,
+			sentMsg.text,
 		);
 		logger.debug("Successfully sent new reply.");
 	} catch (error) {
@@ -401,7 +411,20 @@ async function handleTextMessage(
 
 	const text = messageText;
 	if (text && !text.startsWith("/") && ctx.chat) {
-		await dbService.storeMessageInHistory(ctx.chat.id, messageId, text);
+		// Store everything except what we already have in columns
+		const {
+			chat: _chat,
+			message_id: _message_id,
+			text: _text,
+			...messageExtras
+		} = (isEdit ? ctx.editedMessage : ctx.message) ??
+		({} as NonNullable<typeof ctx.message>);
+		await dbService.storeMessageInHistory(
+			ctx.chat.id,
+			messageId,
+			text,
+			messageExtras,
+		);
 	}
 
 	if (text?.includes("s/")) {
@@ -410,21 +433,30 @@ async function handleTextMessage(
 		if (sedCommands.length === 0) return;
 		const firstMatch = sedCommands[0].match(SED_PATTERN);
 		if (!firstMatch) return;
-		const { targetMsgText, targetMsgId } = await dbService.findTargetMessage(
-			ctx,
-			firstMatch,
-			isEdit ? messageId : undefined,
-		);
+		const { targetMsgText, targetMsgId, extras } =
+			await dbService.findTargetMessage(
+				ctx,
+				firstMatch,
+				isEdit ? messageId : undefined,
+			);
 		if (targetMsgText && targetMsgId && !SED_PATTERN.test(targetMsgText)) {
 			logger.debug(
 				`Found valid target. Proceeding with handleSedCommand (isEdit: ${isEdit}).`,
 			);
+			const linkPreviewDisabled =
+				extras?.link_preview_options &&
+				typeof extras.link_preview_options === "object" &&
+				"is_disabled" in extras.link_preview_options
+					? (extras.link_preview_options as { is_disabled: boolean })
+							.is_disabled
+					: undefined;
 			await sedHandler.handleSedCommand(
 				ctx,
 				sedCommands,
 				targetMsgText,
 				targetMsgId,
 				isEdit,
+				linkPreviewDisabled,
 			);
 		} else if (!targetMsgText || !targetMsgId) {
 			logger.info("No target found for sed command.");
@@ -538,12 +570,15 @@ myCommands.command("health", "Show bot health status", async (ctx) => {
 });
 
 myCommands.command("version", "Show bot version", async (ctx) => {
-	const message = `I am currently on version ${VERSION} (${COMMIT})
-This version was released on ${RELEASED_AT}
+	const richContent = `# regexYbot v${VERSION}
 
-It includes the following changes:
-${CHANGES}`;
-	await ctx.reply(message);
+**Commit:** \`${COMMIT}\`
+**Released:** ${RELEASED_AT}
+
+## Changes
+
+${CHANGES ?? "No changes available"}`;
+	await ctx.replyWithRichMessage({ markdown: richContent });
 });
 
 myCommands.command("metrics", "Show performance metrics", async (ctx) => {
@@ -858,4 +893,4 @@ bot.use(async (_, next) => {
 	await dbService.cleanupOldEntries();
 });
 run(bot);
-logger.info("Bot started with hellspawn worker pool and custom logger!");
+logger.info(`regexY v${VERSION} (${COMMIT}) started successfully!`);

@@ -1,9 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import {
-	SED_PATTERN,
-	getRegexFlags,
-	escapeForMarkdownV2AndBackslashes,
-} from "../utils";
+import { SED_PATTERN, getRegexFlags, escapeMarkdownV2 } from "../utils";
 
 describe("utils", () => {
 	describe("SED_PATTERN", () => {
@@ -61,16 +57,16 @@ describe("utils", () => {
 		});
 	});
 
-	describe("escapeForMarkdownV2AndBackslashes", () => {
+	describe("escapeMarkdownV2", () => {
 		test("should escape MarkdownV2 special characters", () => {
 			const input = "Hello *world*";
-			const result = escapeForMarkdownV2AndBackslashes(input);
+			const result = escapeMarkdownV2(input);
 			expect(result).toBe("Hello \\*world\\*");
 		});
 
 		test("should escape all MarkdownV2 special characters", () => {
 			const input = "_*[]()~`>#+-=|{}.!";
-			const result = escapeForMarkdownV2AndBackslashes(input);
+			const result = escapeMarkdownV2(input);
 			expect(result).toBe(
 				"\\_\\*\\[\\]\\(\\)\\~\\`\\>\\#\\+\\-\\=\\|\\{\\}\\.\\!",
 			);
@@ -78,13 +74,13 @@ describe("utils", () => {
 
 		test("should escape backslashes", () => {
 			const input = "path\\to\\file";
-			const result = escapeForMarkdownV2AndBackslashes(input);
+			const result = escapeMarkdownV2(input);
 			expect(result).toBe("path\\\\to\\\\file");
 		});
 
 		test("should escape both backslashes and MarkdownV2 characters", () => {
 			const input = "Hello\\*world\\*";
-			const result = escapeForMarkdownV2AndBackslashes(input);
+			const result = escapeMarkdownV2(input);
 			expect(result).toBe("Hello\\\\\\*world\\\\\\*");
 		});
 	});

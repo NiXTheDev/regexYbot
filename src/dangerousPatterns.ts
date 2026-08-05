@@ -223,7 +223,7 @@ export function formatDangerousPatternWarning(
 	const lines: string[] = [];
 
 	lines.push("⚠️ Warning: This pattern may cause performance issues\n");
-	lines.push(`Pattern: \`${result.pattern}\``);
+	lines.push(`Pattern: ${result.pattern}`);
 	lines.push(`Risk Score: ${result.complexityScore}/100\n`);
 
 	lines.push("Issues found:");

@@ -65,21 +65,24 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "Releasing version: $VERSION (tag: $TAG)"
 
+      - name: Generate version
+        run: bun run generate
+
       - name: Build binaries
         run: |
-          bun build --compile --target=bun-linux-x64 ./src/index.ts --outfile regexybot-linux-x64
-          chmod +x regexybot-linux-x64
-          tar -czf regexybot-linux-x64.tar.gz regexybot-linux-x64
+          bun run build-linux --target=bun-linux-x64 --outfile dist/regexybot-linux-x64
+          chmod +x dist/regexybot-linux-x64
+          tar -czf dist/regexybot-linux-x64.tar.gz -C dist regexybot-linux-x64
 
-          bun build --compile --target=bun-linux-arm64 ./src/index.ts --outfile regexybot-linux-arm64
-          chmod +x regexybot-linux-arm64
-          tar -czf regexybot-linux-arm64.tar.gz regexybot-linux-arm64
+          bun run build-linux --target=bun-linux-arm64 --outfile dist/regexybot-linux-arm64
+          chmod +x dist/regexybot-linux-arm64
+          tar -czf dist/regexybot-linux-arm64.tar.gz -C dist regexybot-linux-arm64
 
-          bun build --compile --target=bun-windows-x64 ./src/index.ts --outfile regexybot-windows-x64.exe
-          zip -j regexybot-windows-x64.zip regexybot-windows-x64.exe
+          bun run build-win --target=bun-windows-x64 --outfile dist/regexybot-windows-x64.exe
+          zip -j dist/regexybot-windows-x64.zip -C dist regexybot-windows-x64.exe
 
-          bun build --compile --target=bun-windows-arm64 ./src/index.ts --outfile regexybot-windows-arm64.exe
-          zip -j regexybot-windows-arm64.zip regexybot-windows-arm64.exe
+          bun run build-win --target=bun-windows-arm64 --outfile dist/regexybot-windows-arm64.exe
+          zip -j dist/regexybot-windows-arm64.zip -C dist regexybot-windows-arm64.exe
 
       - name: Create release with tag and assets
         run: |
@@ -116,10 +119,10 @@ jobs:
             --create-tag "$TAG" \
             --branch release \
             --body "$RELEASE_BODY" \
-            --attach regexybot-linux-x64.tar.gz \
-            --attach regexybot-linux-arm64.tar.gz \
-            --attach regexybot-windows-x64.zip \
-            --attach regexybot-windows-arm64.zip
+            --attach dist/regexybot-linux-x64.tar.gz \
+            --attach dist/regexybot-linux-arm64.tar.gz \
+            --attach dist/regexybot-windows-x64.zip \
+            --attach dist/regexybot-windows-arm64.zip
 
       - name: Comment on PR
         if: inputs.pr_number != '' || github.event.pull_request.number != ''

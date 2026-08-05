@@ -9,6 +9,24 @@ const { CLEANUP_INTERVAL_MS, MAX_HISTORY_PER_CHAT, HISTORY_QUERY_LIMIT } =
 	CONFIG;
 
 /**
+ * Parses the JSON-encoded extras column back into an object.
+ *
+ * @param extrasJson - The raw extras column value (or null)
+ * @returns The parsed extras object, or undefined when absent/invalid
+ */
+function parseExtras(extrasJson: string | null): Record<string, unknown> {
+	if (!extrasJson) return {};
+	try {
+		const parsed: unknown = JSON.parse(extrasJson);
+		return typeof parsed === "object" && parsed !== null
+			? (parsed as Record<string, unknown>)
+			: {};
+	} catch {
+		return {};
+	}
+}
+
+/**
  * Service class for managing database operations
  *
  * Handles all SQLite interactions for message history, reply tracking,
@@ -56,12 +74,14 @@ export class DatabaseService {
 	 * @param chatId - The Telegram chat ID
 	 * @param messageId - The Telegram message ID
 	 * @param text - The message text content
+	 * @param extras - Optional metadata stored as a JSON blob (e.g. link_preview_disabled, from, chat)
 	 * @returns Promise that resolves when storage is complete
 	 */
 	async storeMessageInHistory(
 		chatId: number,
 		messageId: number,
 		text: string | undefined,
+		extras?: Record<string, unknown>,
 	): Promise<void> {
 		if (text && SED_PATTERN.test(text)) return;
 		const [{ count }] = await this
@@ -71,7 +91,7 @@ export class DatabaseService {
 				.db`DELETE FROM message_history WHERE chat_id = ${chatId} AND message_id IN (SELECT message_id FROM message_history WHERE chat_id = ${chatId} ORDER BY timestamp ASC LIMIT ${count - MAX_HISTORY_PER_CHAT + 1})`;
 		}
 		await this
-			.db`INSERT OR REPLACE INTO message_history (chat_id, message_id, text) VALUES (${chatId}, ${messageId}, ${text ?? ""})`;
+			.db`INSERT OR REPLACE INTO message_history (chat_id, message_id, text, extras) VALUES (${chatId}, ${messageId}, ${text ?? ""}, ${extras ? JSON.stringify(extras) : null})`;
 	}
 
 	async storeBotReplyInHistory(
@@ -92,19 +112,26 @@ export class DatabaseService {
 	 * @param ctx - The Telegram bot context
 	 * @param match - The regex match array from the sed command
 	 * @param excludeMessageId - Optional message ID to exclude from search (for edits)
-	 * @returns Object containing target message text and ID, or empty object if not found
+	 * @returns Object containing target message text, ID, and parsed extras, or empty object if not found
 	 */
 	async findTargetMessage(
 		ctx: MyContext,
 		match: RegExpMatchArray,
 		excludeMessageId?: number,
-	): Promise<{ targetMsgText?: string; targetMsgId?: number }> {
+	): Promise<{
+		targetMsgText?: string;
+		targetMsgId?: number;
+		extras?: Record<string, unknown>;
+	}> {
 		if (ctx.msg?.reply_to_message) {
 			logger.debug("Found target in reply_to_message.");
+			const reply = ctx.msg.reply_to_message;
 			return {
-				targetMsgText:
-					ctx.msg.reply_to_message.text || ctx.msg.reply_to_message.caption,
-				targetMsgId: ctx.msg.reply_to_message.message_id,
+				targetMsgText: reply.text || reply.caption,
+				targetMsgId: reply.message_id,
+				extras: reply.link_preview_options
+					? { link_preview_options: reply.link_preview_options }
+					: {},
 			};
 		}
 		const chatId = ctx.chat?.id;
@@ -112,11 +139,15 @@ export class DatabaseService {
 		const fr = match[1].replace(/\\\//g, "/");
 		const regex = new RegExp(fr, getRegexFlags(match[3]).flags);
 		const rows = await this
-			.db`SELECT message_id, text FROM message_history WHERE chat_id = ${chatId} ${excludeMessageId ? sql`AND message_id != ${excludeMessageId}` : sql``} ORDER BY timestamp DESC LIMIT ${HISTORY_QUERY_LIMIT}`;
+			.db`SELECT message_id, text, extras FROM message_history WHERE chat_id = ${chatId} ${excludeMessageId ? sql`AND message_id != ${excludeMessageId}` : sql``} ORDER BY timestamp DESC LIMIT ${HISTORY_QUERY_LIMIT}`;
 		for (const row of rows) {
 			if (row.text && regex.test(row.text)) {
 				logger.debug(`Found target in history (msg_id: ${row.message_id}).`);
-				return { targetMsgText: row.text, targetMsgId: row.message_id };
+				return {
+					targetMsgText: row.text,
+					targetMsgId: row.message_id,
+					extras: parseExtras(row.extras),
+				};
 			}
 		}
 		logger.debug("No matching target found in history.");

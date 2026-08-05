@@ -5,7 +5,7 @@
  */
 
 import { InlineKeyboard } from "grammy";
-import { escapeForMarkdownV2AndBackslashes } from "./utils";
+import { escapeMarkdownV2 } from "./utils";
 
 export interface RegexHelpItem {
 	name: string;
@@ -300,11 +300,9 @@ export function formatItemHelp(
 	if (!item) return null;
 
 	// Escape special characters for MarkdownV2
-	const name = escapeForMarkdownV2AndBackslashes(item.name);
-	const description = escapeForMarkdownV2AndBackslashes(item.description);
-	const example = item.example
-		? escapeForMarkdownV2AndBackslashes(item.example)
-		: null;
+	const name = escapeMarkdownV2(item.name);
+	const description = escapeMarkdownV2(item.description);
+	const example = item.example ? escapeMarkdownV2(item.example) : null;
 
 	let message = `*${name}*\n\n`;
 	message += `${description}\n\n`;
@@ -323,16 +321,16 @@ export function formatCategoryHelp(categoryKey: string): string | null {
 	if (!category) return null;
 
 	// Escape special characters for MarkdownV2
-	const name = escapeForMarkdownV2AndBackslashes(category.name);
-	const description = escapeForMarkdownV2AndBackslashes(category.description);
+	const name = escapeMarkdownV2(category.name);
+	const description = escapeMarkdownV2(category.description);
 
 	let message = `*${name}*\n\n`;
 	message += `${description}\n\n`;
 	message += `Available items:\n`;
 
 	for (const item of Object.values(category.items)) {
-		const itemName = escapeForMarkdownV2AndBackslashes(item.name);
-		const itemDesc = escapeForMarkdownV2AndBackslashes(item.description);
+		const itemName = escapeMarkdownV2(item.name);
+		const itemDesc = escapeMarkdownV2(item.description);
 		message += `• ${itemName}: ${itemDesc}\n`;
 	}
 
@@ -349,8 +347,8 @@ export function getMainHelpMessage(): string {
 	];
 
 	for (const cat of Object.values(regexHelpData)) {
-		const name = escapeForMarkdownV2AndBackslashes(cat.name);
-		const desc = escapeForMarkdownV2AndBackslashes(cat.description);
+		const name = escapeMarkdownV2(cat.name);
+		const desc = escapeMarkdownV2(cat.description);
 		lines.push(`• *${name}*: ${desc}`);
 	}
 

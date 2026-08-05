@@ -3,6 +3,39 @@
 All notable changes to this project will be documented in this file.
 
 <details open>
+<summary><b>[0.2.2.1] - 2026-07-30</b></summary>
+
+### Version System
+
+- Single-source `src/version.ts` with 4-tier resolution (first non-null wins):
+  1. Git commands (works in dev with git installed)
+  2. Raw `.git` file reading (works without git binary)
+  3. Environment variables (Docker via build args → ENV)
+  4. Fallback defaults (commit=0000000, version from package.json)
+- Deleted `scripts/generate-version.ts` — logic fully ported to `src/version.ts`
+- `package.json` generate script now runs `bun run src/version.ts` directly
+- `.version.json` generated at runtime for binary builds via `--define`
+
+### Docker & CI
+
+- Dockerfile accepts `VERSION`, `COMMIT`, `RELEASED_AT`, `CHANGES` as build args → ENV passthrough
+- CI workflows (push-checks, pr-checks) compute version info and pass as Docker build-args
+- Empty VERSION guard in CI prevents invalid Docker tags
+
+### Bug Fixes
+
+- MarkdownV2 dangerous pattern warning fix — escaped text prevents Telegram 400 parse errors
+- Renamed `escapeForMarkdownV2AndBackslashes` → `escapeMarkdownV2` for clarity
+- History storage uses Telegram-returned `sentMsg.text` (fixes trailing space disconnect)
+- `.trimEnd()` applied to sed result text at source
+
+### Maintenance
+
+- Fixed empty catch block lint error in `version.ts`
+
+</details>
+
+<details>
 <summary><b>[0.2.2] - 2026-07-20</b></summary>
 
 ### grammY Upgrade

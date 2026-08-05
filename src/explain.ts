@@ -4,7 +4,7 @@
  * Parses regex patterns and generates human-readable explanations
  */
 
-import { escapeForMarkdownV2AndBackslashes } from "./utils";
+import { escapeMarkdownV2 } from "./utils";
 
 /**
  * Token representing a part of a regex pattern
@@ -308,12 +308,12 @@ export function explainPattern(pattern: string): string {
 	}
 
 	// Build explanation
-	let explanation = `Pattern: ${escapeForMarkdownV2AndBackslashes(displayPattern)}\n\n`;
+	let explanation = `Pattern: ${escapeMarkdownV2(displayPattern)}\n\n`;
 	explanation += "Breakdown:\n";
 
 	for (const token of tokens) {
-		const value = escapeForMarkdownV2AndBackslashes(token.value);
-		const desc = escapeForMarkdownV2AndBackslashes(token.description);
+		const value = escapeMarkdownV2(token.value);
+		const desc = escapeMarkdownV2(token.description);
 		explanation += `• ${value}: ${desc}\n`;
 	}
 

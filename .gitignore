@@ -6,6 +6,7 @@ node_modules
 out
 dist
 *.tgz
+.version.json
 
 # code coverage
 coverage

@@ -14,6 +14,7 @@ describe("DatabaseService", () => {
 				chat_id INTEGER NOT NULL,
 				message_id INTEGER NOT NULL,
 				text TEXT,
+				extras TEXT,
 				timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
 				PRIMARY KEY (chat_id, message_id)
 			)
@@ -57,6 +58,23 @@ describe("DatabaseService", () => {
 			expect(messages.length).toBe(2);
 			const msg = messages.find((m) => m.message_id === 100);
 			expect(msg?.text).toBe("Updated");
+		});
+
+		test("should store and retrieve extras as a JSON blob", async () => {
+			await dbService.storeMessageInHistory(12345, 102, "With link", {
+				link_preview_disabled: true,
+			});
+			await dbService.storeMessageInHistory(12345, 103, "No extras");
+
+			const row =
+				await db`SELECT extras FROM message_history WHERE chat_id = 12345 AND message_id = 102`;
+			expect(JSON.parse(row[0].extras)).toEqual({
+				link_preview_disabled: true,
+			});
+
+			const rowNoExtras =
+				await db`SELECT extras FROM message_history WHERE chat_id = 12345 AND message_id = 103`;
+			expect(rowNoExtras[0].extras).toBeNull();
 		});
 	});
 

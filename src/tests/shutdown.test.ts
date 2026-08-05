@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn } from "node:child_process";
+import { isBotReady } from "../utils/healthCheck";
 
 /**
  * Integration tests for graceful shutdown functionality
@@ -13,37 +14,6 @@ import { spawn, type ChildProcess } from "node:child_process";
 
 const TOKEN = process.env.TOKEN;
 const describeOrSkip = TOKEN ? describe : describe.skip;
-
-async function waitForBotStart(
-	botProcess: ChildProcess,
-	timeoutMs: number = 10000,
-): Promise<void> {
-	return new Promise((resolve, reject) => {
-		const timeout = setTimeout(
-			() => reject(new Error("Bot did not start in time")),
-			timeoutMs,
-		);
-		botProcess.stdout?.on("data", (data: string) => {
-			if (data.toString().includes("Bot started with hellspawn worker pool")) {
-				clearTimeout(timeout);
-				resolve();
-			}
-		});
-		botProcess.stderr?.on("data", (data: string) => {
-			const text = data.toString();
-			if (text.includes("Error") || text.includes("error")) {
-				// Just log, don't reject — some errors are expected
-				console.log("Bot stderr:", text);
-			}
-		});
-		// If process exits before startup message, resolve anyway
-		// (tests should not hang if the bot fails to start)
-		botProcess.on("exit", () => {
-			clearTimeout(timeout);
-			resolve();
-		});
-	});
-}
 
 describeOrSkip("Graceful Shutdown Integration", () => {
 	test("should respond to shutdown signal", async () => {
@@ -77,7 +47,7 @@ describeOrSkip("Graceful Shutdown Integration", () => {
 		});
 
 		// Wait for bot to fully start
-		await waitForBotStart(botProcess);
+		await isBotReady({ process: botProcess });
 
 		// Send shutdown signal
 		// On Windows, this may not trigger graceful shutdown handlers
@@ -134,7 +104,7 @@ describeOrSkip("Graceful Shutdown Integration", () => {
 		});
 
 		// Wait for bot to start
-		await waitForBotStart(botProcess);
+		await isBotReady({ process: botProcess });
 
 		// Send multiple signals
 		botProcess.kill("SIGTERM");

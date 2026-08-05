@@ -74,6 +74,8 @@ export interface BotConfig {
 	// Feature Toggles
 	readonly FEATURE_TIPS: boolean;
 	readonly FEATURE_WARNINGS: boolean;
+	readonly ROAST_CHANCE: number;
+	readonly FEATURE_ROAST: boolean;
 }
 
 /**
@@ -89,6 +91,43 @@ function parseIntEnv(
 	if (!raw) return defaultValue;
 
 	const parsed = parseInt(raw, 10);
+	if (isNaN(parsed)) {
+		console.warn(
+			`[Config]: Invalid value for ${key}: "${raw}". Using default: ${defaultValue}`,
+		);
+		return defaultValue;
+	}
+
+	if (minValue !== undefined && parsed < minValue) {
+		console.warn(
+			`[Config]: ${key} value ${parsed} is below minimum ${minValue}. Using minimum.`,
+		);
+		return minValue;
+	}
+
+	if (maxValue !== undefined && parsed > maxValue) {
+		console.warn(
+			`[Config]: ${key} value ${parsed} is above maximum ${maxValue}. Using maximum.`,
+		);
+		return maxValue;
+	}
+
+	return parsed;
+}
+
+/**
+ * Helper function to parse float env vars with validation.
+ */
+function parseFloatEnv(
+	key: string,
+	defaultValue: number,
+	minValue?: number,
+	maxValue?: number,
+): number {
+	const raw = process.env[key];
+	if (!raw) return defaultValue;
+
+	const parsed = parseFloat(raw);
 	if (isNaN(parsed)) {
 		console.warn(
 			`[Config]: Invalid value for ${key}: "${raw}". Using default: ${defaultValue}`,
@@ -287,6 +326,8 @@ function loadConfig(): BotConfig {
 		// Feature Toggles
 		FEATURE_TIPS: parseBoolEnv("FEATURE_TIPS", true),
 		FEATURE_WARNINGS: parseBoolEnv("FEATURE_WARNINGS", true),
+		ROAST_CHANCE: parseFloatEnv("ROAST_CHANCE", 0.0002, 0, 1),
+		FEATURE_ROAST: parseBoolEnv("FEATURE_ROAST", true),
 	};
 
 	// Log configuration summary (only in non-production to avoid leaking sensitive data)

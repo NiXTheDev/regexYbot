@@ -37,4 +37,4 @@ bun --bun tsc --noEmit
 bunx eslint
 bun test
 
-echo "All checks passed!"
+echo "All checks passed!\nWriting commit object..."

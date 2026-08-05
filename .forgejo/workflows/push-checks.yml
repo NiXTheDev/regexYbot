@@ -74,14 +74,24 @@ jobs:
         id: version
         run: |
           VERSION=$(grep '"version"' package.json 2>/dev/null | head -1 | cut -d '"' -f 4 || echo "latest")
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          if [ -z "$VERSION" ]; then VERSION="latest"; fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           BRANCH='${{ github.ref_name }}'
-          echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "released_at=$(date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+          CHANGES=$(git log -1 --format=%b HEAD)
+          {
+            echo "changes<<EOF"
+            echo "${CHANGES}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Generate tags
         id: tags
         run: |
           VERSION='${{ steps.version.outputs.version }}'
+          if [ -z "$VERSION" ]; then VERSION="latest"; fi
           BRANCH='${{ steps.version.outputs.branch }}'
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
 
@@ -138,6 +148,16 @@ jobs:
         run: |
           curl -fsSL "https://download.docker.com/linux/static/stable/$(uname -m)/docker-28.0.4.tgz" | tar xz -C /usr/local/bin --strip-components=1 docker/docker
 
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+
+      - name: Generate version
+        run: |
+          bun install -d
+          bun run generate
+
       - name: Set up QEMU
         uses: https://hangar.nixthedev.ru/docker/setup-qemu-action@v3
 
@@ -175,5 +195,10 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            COMMIT=${{ steps.version.outputs.commit }}
+            RELEASED_AT=${{ steps.version.outputs.released_at }}
+            CHANGES=${{ steps.version.outputs.changes }}
           cache-from: type=registry,ref=hangar.nixthedev.ru/${{ steps.repo.outputs.name }}:buildcache
           cache-to: type=registry,ref=hangar.nixthedev.ru/${{ steps.repo.outputs.name }}:buildcache,mode=max

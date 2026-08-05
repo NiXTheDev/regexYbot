@@ -55,6 +55,6 @@ export default [
 		rules: {},
 	},
 	{
-		ignores: ["node_modules/", "dist/", "*.lock"],
+		ignores: ["node_modules/", "dist/", "scripts/", "*.lock"],
 	},
 ];

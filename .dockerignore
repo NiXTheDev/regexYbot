@@ -1,11 +1,12 @@
 **
 
 !/src
+!/scripts
 !/package.json
 !/bun.lock
 
 /src/tests
-/.forgjo
+/.forgejo
 /.githooks
 /docker
 /node_modules

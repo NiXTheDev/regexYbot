@@ -76,7 +76,7 @@ export function getRegexFlags(flagsMatch: string | undefined): {
 }
 
 // Function to escape MarkdownV2 special characters and literal backslashes correctly
-export function escapeForMarkdownV2AndBackslashes(text: string): string {
+export function escapeMarkdownV2(text: string): string {
 	// First, escape any literal backslashes in the original text.
 	let escapedText = text.replace(/\\/g, "\\\\");
 	// Then, escape all MarkdownV2 special characters with a single backslash.

@@ -74,6 +74,16 @@ jobs:
         run: |
           curl -fsSL "https://download.docker.com/linux/static/stable/$(uname -m)/docker-28.0.4.tgz" | tar xz -C /usr/local/bin --strip-components=1 docker/docker
 
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+
+      - name: Generate version
+        run: |
+          bun install -d
+          bun run generate
+
       - name: Set up QEMU
         uses: https://hangar.nixthedev.ru/docker/setup-qemu-action@v3
 
@@ -97,6 +107,10 @@ jobs:
           TAG="ghcr.io/${{ steps.repo.outputs.name }}:pr-${{ github.event.pull_request.number }}"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
+      - name: Get build date
+        id: build_date
+        run: echo "released_at=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
       - name: Build Docker image (validation only)
         uses: https://hangar.nixthedev.ru/docker/build-push-action@v6
         with:
@@ -105,5 +119,10 @@ jobs:
           push: false
           load: false
           tags: ${{ steps.tag.outputs.tag }}
+          build-args: |
+            VERSION=0.0.0-dev
+            COMMIT=${{ github.sha }}
+            RELEASED_AT=${{ steps.build_date.outputs.released_at }}
+            CHANGES=PR #${{ github.event.pull_request.number }} validation build
           cache-from: type=registry,ref=hangar.nixthedev.ru/${{ steps.repo.outputs.name }}:buildcache
           cache-to: type=registry,ref=hangar.nixthedev.ru/${{ steps.repo.outputs.name }}:buildcache,mode=max
