@@ -1,4 +1,5 @@
 import { CommandGroup, commands } from "@grammyjs/commands";
+import { hydrate } from "@grammyjs/hydrate";
 import { InlineKeyboard } from "grammy";
 import {
 	computeDiff,
@@ -61,6 +62,9 @@ const {
 const logger = new Logger("Main");
 logger.info("Initializing bot...");
 const bot = new Bot<MyContext>(TOKEN, { client: { apiRoot: BASE_URL } });
+
+// --- Hydrate (early: populate ctx.msg/ctx.editedMessage/ctx.chatMember etc.) ---
+bot.use(hydrate());
 
 // --- Rate Limiting & Retry Configuration ---
 bot.api.config.use(

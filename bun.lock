@@ -7,6 +7,7 @@
       "dependencies": {
         "@grammyjs/auto-retry": "^2.0.2",
         "@grammyjs/commands": "^1.4.0",
+        "@grammyjs/hydrate": "^1.7.0",
         "@grammyjs/i18n": "^1.1.2",
         "@grammyjs/runner": "^2.0.3",
         "grammy": "^1.45.1",
@@ -53,6 +54,8 @@
     "@grammyjs/auto-retry": ["@grammyjs/auto-retry@2.0.2", "", { "dependencies": { "debug": "^4.3.4" }, "peerDependencies": { "grammy": "^1.10.0" } }, "sha512-b4A4p5jlYDiQtW0c0FXYe11WMkYoiW+5rvOaDMCOk1h7Pu2SDl7B7gmFF8cthWCx2+M2nWLOsBxAgbBG4kKWYg=="],
 
     "@grammyjs/commands": ["@grammyjs/commands@1.4.0", "", { "peerDependencies": { "grammy": "^1.45.1" } }, "sha512-xUXIfpJ1IlQ/9lL7nZPyYdHytIJ6pPCxxcaA/FYb0GxDcK2gXHS0hdL/1rC2EOnXD4p/ft4lpDS9dXCq3nIXag=="],
+
+    "@grammyjs/hydrate": ["@grammyjs/hydrate@1.7.0", "", { "dependencies": { "abort-controller": "^3.0.0" }, "peerDependencies": { "grammy": "^1.38.0" } }, "sha512-X8uUlyEaddMdiFpbrW9JY0adme1GaM/PLb+bgVMS08hjDtgUiGGydIjltj/auVVKiG6zJAZSG3Z/RbBjBRnxhQ=="],
 
     "@grammyjs/i18n": ["@grammyjs/i18n@1.1.2", "", { "dependencies": { "@deno/shim-deno": "~0.18.0", "@fluent/bundle": "^0.17.1", "@fluent/langneg": "^0.6.2" }, "peerDependencies": { "grammy": "^1.10.0" } }, "sha512-PcK06mxuDDZjxdZ5HywBhr+erEITsR816KP4DNIDDds1jpA45pfz/nS9FdZmzF8H6lMyPix3mV5WL1rT4q+BuA=="],
 

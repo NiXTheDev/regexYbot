@@ -7,6 +7,7 @@
 import { I18n, type I18nFlavor } from "@grammyjs/i18n";
 import type { Context, SessionFlavor } from "grammy";
 import type { CommandsFlavor } from "@grammyjs/commands";
+import type { HydrateFlavor } from "@grammyjs/hydrate";
 import path from "node:path";
 
 // Session data interface
@@ -15,10 +16,9 @@ export interface SessionData {
 }
 
 // Context type with i18n and session support
-export type MyContext = Context &
-	CommandsFlavor &
-	I18nFlavor &
-	SessionFlavor<SessionData>;
+export type MyContext = HydrateFlavor<
+	Context & CommandsFlavor & I18nFlavor & SessionFlavor<SessionData>
+>;
 
 /**
  * Available language codes
