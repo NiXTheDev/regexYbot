@@ -310,10 +310,19 @@ export class SedHandler {
 					// Show warning but continue execution
 					const warning = formatDangerousPatternWarning(dangerCheck);
 					if (CONFIG.FEATURE_WARNINGS) {
-						await ctx.reply(escapeMarkdownV2(warning), {
-							parse_mode: "MarkdownV2",
-							receiver_user_id: ctx.from?.id,
-						});
+						const isGroupChat =
+							ctx.chat?.type === "group" || ctx.chat?.type === "supergroup";
+						try {
+							await ctx.reply(escapeMarkdownV2(warning), {
+								parse_mode: "MarkdownV2",
+								receiver_user_id: isGroupChat ? ctx.from?.id : undefined,
+							});
+						} catch (error: unknown) {
+							this.logger.error(
+								String(error),
+								"Failed to send dangerous pattern warning",
+							);
+						}
 					}
 				}
 			}
