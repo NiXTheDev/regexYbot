@@ -18,8 +18,10 @@ describe("Telegram API Integration", () => {
 			expect(bot).toBeDefined();
 		});
 
-		test.skip("should handle invalid token gracefully", async () => {
-			const invalidBot = new Bot("invalid_token_12345");
+		test("should handle invalid token gracefully", async () => {
+			const invalidBot = new Bot("invalid_token_12345", {
+				client: { apiRoot: CONFIG.BASE_URL },
+			});
 
 			// Should throw when trying to use API with invalid token
 			await expect(invalidBot.api.getMe()).rejects.toThrow();
@@ -69,17 +71,19 @@ describe("Telegram API Integration", () => {
 	});
 
 	describe("Real API Tests (Staging)", () => {
-		// Only run these if STAGING_TOKEN is explicitly available
-		const stagingToken = process.env.STAGING_TOKEN ?? "";
-		const haveStagingToken = !!stagingToken;
+		// Only run these if TOKEN is explicitly available
+		const token = process.env.TOKEN ?? "";
+		const haveToken = !!token;
 
-		(haveStagingToken ? describe : describe.skip)(
+		(haveToken ? describe : describe.skip)(
 			"With Real Staging Bot",
 			() => {
 				let bot: Bot;
 
 				beforeEach(() => {
-					bot = new Bot(stagingToken);
+					bot = new Bot(token, {
+						client: { apiRoot: CONFIG.BASE_URL },
+					});
 				});
 
 				afterEach(() => {
