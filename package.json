@@ -5,12 +5,9 @@
 	"dependencies": {
 		"@grammyjs/auto-retry": "^2.0.2",
 		"@grammyjs/commands": "^1.4.0",
-		"@grammyjs/hydrate": "^1.7.0",
 		"@grammyjs/i18n": "^1.1.2",
-		"@grammyjs/ratelimiter": "^1.2.1",
 		"@grammyjs/runner": "^2.0.3",
-		"grammy": "^1.45.1",
-		"minimatch": "^10.2.6"
+		"grammy": "^1.45.1"
 	},
 	"devDependencies": {
 		"@bun-security-scanner/osv": "^1.0.0",
