@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 
 <details open>
+<summary><b>[0.2.2.2] - 2026-08-11</b></summary>
+
+### Bug Fixes
+
+- Fixed Telegram 403 errors: `receiver_user_id` is now only sent in group/supergroup chats for dangerous-pattern warnings (`src/sed.ts`) and optimization tips (`src/optimizationTips.ts`), with a graceful fallback so sed still executes if the warning fails to send
+- Deduplicated CI version detection: `push-checks.yml` now parses `.version.json` instead of duplicating version detection logic
+- Fixed self-build version reporting: `.version.json` is baked at Docker build time and a new `resolveFromVersionJson()` tier was added, so self-builders get the correct version/commit instead of `0000000`
+- Removed dead dependencies: `@grammyjs/hydrate`, `@grammyjs/ratelimiter`, and `minimatch`
+
+</details>
+
+<details open>
 <summary><b>[0.2.2.1-hf1] - 2026-08-05</b></summary>
 
 ### Bug Fixes
