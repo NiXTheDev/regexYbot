@@ -70,17 +70,26 @@ jobs:
       - name: Checkout code
         uses: https://hangar.nixthedev.ru/actions/checkout@v4
 
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+
+      - name: Generate version
+        run: |
+          bun install -d
+          bun run generate
+
       - name: Get version
         id: version
         run: |
-          VERSION=$(grep '"version"' package.json 2>/dev/null | head -1 | cut -d '"' -f 4 || echo "latest")
-          if [ -z "$VERSION" ]; then VERSION="latest"; fi
+          VERSION=$(bun -e "(async () => { const v = JSON.parse(await Bun.file('.version.json').text()); console.log(v.version); })()")
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           BRANCH='${{ github.ref_name }}'
           echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
-          echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "released_at=$(date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
-          CHANGES=$(git log -1 --format=%b HEAD)
+          echo "commit=$(bun -e "(async () => { const v = JSON.parse(await Bun.file('.version.json').text()); console.log(v.commit); })()")" >> "$GITHUB_OUTPUT"
+          echo "released_at=$(bun -e "(async () => { const v = JSON.parse(await Bun.file('.version.json').text()); console.log(v.releasedAt); })()")" >> "$GITHUB_OUTPUT"
+          CHANGES=$(bun -e "(async () => { const v = JSON.parse(await Bun.file('.version.json').text()); console.log(v.changes ?? ''); })()")
           {
             echo "changes<<EOF"
             echo "${CHANGES}"
@@ -147,16 +156,6 @@ jobs:
       - name: Install Docker CLI
         run: |
           curl -fsSL "https://download.docker.com/linux/static/stable/$(uname -m)/docker-28.0.4.tgz" | tar xz -C /usr/local/bin --strip-components=1 docker/docker
-
-      - name: Install Bun
-        run: |
-          curl -fsSL https://bun.sh/install | bash
-          echo "$HOME/.bun/bin" >> $GITHUB_PATH
-
-      - name: Generate version
-        run: |
-          bun install -d
-          bun run generate
 
       - name: Set up QEMU
         uses: https://hangar.nixthedev.ru/docker/setup-qemu-action@v3
