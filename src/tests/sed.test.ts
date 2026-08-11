@@ -1,5 +1,7 @@
 import { describe, test, expect } from "bun:test";
-import { parseSedCommands } from "../sed";
+import { parseSedCommands, SedHandler } from "../sed";
+import type { MyContext } from "../i18n";
+import type { WorkerPool } from "../workerPool";
 
 describe("parseSedCommands", () => {
 	describe("basic command parsing", () => {
@@ -245,5 +247,98 @@ lines of markdown/`;
 			const commands = parseSedCommands(text);
 			expect(commands).toEqual(["s/\\bword\\b/replacement/g"]);
 		});
+	});
+});
+
+describe("SedHandler dangerous pattern warning", () => {
+	const dangerousCommand = "s/(a+)+$/x/";
+
+	function setupHandler(chatType: string, replyImpl?: () => Promise<unknown>) {
+		const replyCalls: Array<{
+			text: string;
+			options?: Record<string, unknown>;
+		}> = [];
+		const reply = async (text: string, options?: Record<string, unknown>) => {
+			replyCalls.push({ text, options });
+			if (replyImpl) return replyImpl();
+			return { message_id: 1 };
+		};
+
+		const ctx = {
+			chat: { id: 123, type: chatType },
+			from: { id: 456 },
+			reply,
+			api: { sendMessage: async () => ({ message_id: 1 }) },
+		} as unknown as MyContext;
+
+		const runTracker = { count: 0 };
+		const workerPool = {
+			run: async () => {
+				runTracker.count++;
+				return { result: "substituted text", performanceMs: null };
+			},
+		} as unknown as WorkerPool;
+
+		const sendOrEditReplyCalls: Array<{
+			targetMsgId: number;
+			messageText: string;
+			isEdit: boolean;
+		}> = [];
+		const sendOrEditReply = async (
+			_ctx: MyContext,
+			targetMsgId: number,
+			messageText: string,
+			isEdit: boolean,
+		) => {
+			sendOrEditReplyCalls.push({ targetMsgId, messageText, isEdit });
+		};
+
+		const handler = new SedHandler({ workerPool, sendOrEditReply });
+
+		return { handler, ctx, replyCalls, runTracker, sendOrEditReplyCalls };
+	}
+
+	test("passes receiver_user_id in group chat warning", async () => {
+		const { handler, ctx, replyCalls, runTracker, sendOrEditReplyCalls } =
+			setupHandler("group");
+		await handler.handleSedCommand(
+			ctx,
+			[dangerousCommand],
+			"original text",
+			42,
+			false,
+		);
+		expect(replyCalls).toHaveLength(1);
+		expect(replyCalls[0].options?.receiver_user_id).toBe(456);
+		expect(runTracker.count).toBe(1);
+		expect(sendOrEditReplyCalls).toHaveLength(1);
+		expect(sendOrEditReplyCalls[0].messageText).toBe("substituted text");
+	});
+
+	test("omits receiver_user_id in private chat warning", async () => {
+		const { handler, ctx, replyCalls } = setupHandler("private");
+		await handler.handleSedCommand(
+			ctx,
+			[dangerousCommand],
+			"original text",
+			42,
+			false,
+		);
+		expect(replyCalls).toHaveLength(1);
+		expect(replyCalls[0].options?.receiver_user_id).toBeUndefined();
+	});
+
+	test("continues substitution when warning reply fails", async () => {
+		const { handler, ctx, replyCalls, runTracker, sendOrEditReplyCalls } =
+			setupHandler("private", async () => {
+				throw new Error("403: bot can't initiate conversation with a user");
+			});
+		await expect(
+			handler.handleSedCommand(ctx, [dangerousCommand], "original text", 42, false),
+		).resolves.toBeUndefined();
+		expect(replyCalls).toHaveLength(1);
+		expect(runTracker.count).toBe(1);
+		expect(sendOrEditReplyCalls).toHaveLength(1);
+		expect(sendOrEditReplyCalls[0].messageText).toBe("substituted text");
 	});
 });

@@ -1,5 +1,9 @@
 import { describe, test, expect } from "bun:test";
-import { analyzePatternForTips, formatTip } from "../optimizationTips";
+import {
+	analyzePatternForTips,
+	formatTip,
+	sendTransientTip,
+} from "../optimizationTips";
 
 describe("analyzePatternForTips", () => {
 	test("does not flag \\S as unnecessary", () => {
@@ -93,5 +97,53 @@ describe("analyzePatternForTips", () => {
 	test("shows grouping tip when no replacement provided", () => {
 		const tips = analyzePatternForTips("(\\w+)\\s(\\w+)\\s(\\w+)");
 		expect(tips.some((t) => t.pattern === "multiple ( ) groups")).toBe(true);
+	});
+});
+
+describe("sendTransientTip", () => {
+	const tip = {
+		pattern: "\\e",
+		suggestion: "remove unnecessary escaping",
+		reason: "matches literal e",
+		severity: "minor" as const,
+	};
+
+	function createMockCtx(chatType: string) {
+		let capturedOptions: { receiver_user_id?: number } | undefined;
+		const sendMessage = async (
+			_chatId: number,
+			_text: string,
+			options?: { receiver_user_id?: number },
+		) => {
+			capturedOptions = options;
+			return { message_id: 1 };
+		};
+		return {
+			ctx: {
+				api: { sendMessage },
+				chat: { id: 123, type: chatType },
+				from: { id: 456 },
+			},
+			getOptions: () => capturedOptions,
+		};
+	}
+
+	test("passes receiver_user_id in group chat", async () => {
+		const { ctx, getOptions } = createMockCtx("group");
+		await sendTransientTip(ctx, tip);
+		expect(getOptions()?.receiver_user_id).toBe(456);
+	});
+
+	test("passes receiver_user_id in supergroup chat", async () => {
+		const { ctx, getOptions } = createMockCtx("supergroup");
+		await sendTransientTip(ctx, tip);
+		expect(getOptions()?.receiver_user_id).toBe(456);
+	});
+
+	test("omits receiver_user_id in private chat", async () => {
+		const { ctx, getOptions } = createMockCtx("private");
+		await sendTransientTip(ctx, tip);
+		expect(getOptions()).toBeDefined();
+		expect("receiver_user_id" in (getOptions() ?? {})).toBe(false);
 	});
 });
