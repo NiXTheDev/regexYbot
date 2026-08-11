@@ -5,7 +5,8 @@
  *   1. git commands (works in dev with git installed)
  *   2. raw .git file reading (works without git binary)
  *   3. environment variables (Docker via build args → ENV)
- *   4. fallback (commit=0000000, version from package.json, today, null changes)
+ *   4. .version.json (baked at Docker build time, read at runtime)
+ *   5. fallback (commit=0000000, version from package.json, today, null changes)
  *
  * When run directly (`bun run src/version.ts`), writes .version.json for binary builds.
  */
@@ -178,11 +179,38 @@ function resolveFromEnv(): VersionInfo | null {
 }
 
 // ============================================================
+// Tier 4: .version.json (baked at Docker build time)
+// ============================================================
+
+function resolveFromVersionJson(): VersionInfo | null {
+	try {
+		const raw = readFileSync(join(root, ".version.json"), "utf-8");
+		const parsed = JSON.parse(raw) as Partial<VersionInfo>;
+		if (parsed.version && parsed.commit) {
+			return {
+				version: parsed.version,
+				commit: parsed.commit,
+				releasedAt:
+					parsed.releasedAt ?? new Date().toISOString().split("T")[0],
+				changes: parsed.changes ?? null,
+			};
+		}
+		return null;
+	} catch {
+		return null;
+	}
+}
+
+// ============================================================
 // Resolution
 // ============================================================
 
 const info: VersionInfo =
-	resolveFromGit() ?? resolveFromRawGit() ?? resolveFromEnv() ?? FALLBACK;
+	resolveFromGit() ??
+	resolveFromRawGit() ??
+	resolveFromEnv() ??
+	resolveFromVersionJson() ??
+	FALLBACK;
 
 // ---- Exports ----
 
