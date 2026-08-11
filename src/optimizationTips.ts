@@ -253,7 +253,7 @@ export async function sendTransientTip(
 				options?: { receiver_user_id?: number },
 			) => Promise<{ message_id: number }>;
 		};
-		chat?: { id: number };
+		chat?: { id: number; type?: string };
 		from?: { id: number };
 	},
 	tip: OptimizationTip,
@@ -262,8 +262,11 @@ export async function sendTransientTip(
 
 	try {
 		if (ctx.chat?.id && ctx.from?.id) {
+			const isGroupLike =
+				ctx.chat?.type === "group" || ctx.chat?.type === "supergroup";
+
 			await ctx.api.sendMessage(ctx.chat.id, formattedTip, {
-				receiver_user_id: ctx.from.id,
+				...(isGroupLike && { receiver_user_id: ctx.from.id }),
 			});
 		}
 	} catch (error) {
