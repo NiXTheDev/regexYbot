@@ -2,6 +2,11 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { Bot } from "grammy";
 import { CONFIG } from "../config";
 
+// Live integration tests hit a real Telegram API server. They are opt-in so the
+// default `bun test` run stays hermetic and deterministic (no network, DNS, or
+// staging-server dependency). Enable them explicitly with LIVE_API_TESTS=1.
+const LIVE_API_TESTS = !!process.env.LIVE_API_TESTS;
+
 describe("Telegram API Integration", () => {
 	describe("Bot Initialization", () => {
 		test("should create bot instance with token", () => {
@@ -18,14 +23,17 @@ describe("Telegram API Integration", () => {
 			expect(bot).toBeDefined();
 		});
 
-		test("should handle invalid token gracefully", async () => {
-			const invalidBot = new Bot("invalid_token_12345", {
-				client: { apiRoot: CONFIG.BASE_URL },
-			});
+		(LIVE_API_TESTS ? test : test.skip)(
+			"should handle invalid token gracefully",
+			async () => {
+				const invalidBot = new Bot("invalid_token_12345", {
+					client: { apiRoot: CONFIG.BASE_URL },
+				});
 
-			// Should throw when trying to use API with invalid token
-			await expect(invalidBot.api.getMe()).rejects.toThrow();
-		});
+				// Should throw when trying to use API with invalid token
+				await expect(invalidBot.api.getMe()).rejects.toThrow();
+			},
+		);
 	});
 
 	describe("API Methods (Mocked)", () => {
@@ -71,75 +79,81 @@ describe("Telegram API Integration", () => {
 	});
 
 	describe("Real API Tests (Staging)", () => {
-		// Only run these if TOKEN is explicitly available
+		// Opt-in (LIVE_API_TESTS=1) and requires TOKEN to be configured.
 		const token = process.env.TOKEN ?? "";
 		const haveToken = !!token;
 
-		(haveToken ? describe : describe.skip)("With Real Staging Bot", () => {
-			let bot: Bot;
+		(LIVE_API_TESTS && haveToken ? describe : describe.skip)(
+			"With Real Staging Bot",
+			() => {
+				let bot: Bot;
 
-			beforeEach(() => {
-				bot = new Bot(token, {
-					client: { apiRoot: CONFIG.BASE_URL },
+				beforeEach(() => {
+					bot = new Bot(token, {
+						client: { apiRoot: CONFIG.BASE_URL },
+					});
 				});
-			});
 
-			afterEach(() => {
-				// Clean up
-				bot.stop();
-			});
-
-			test("should get bot info", async () => {
-				const me = await bot.api.getMe();
-				expect(me).toBeDefined();
-				expect(me.id).toBeDefined();
-				expect(me.first_name).toBeDefined();
-				expect(me.username).toBeDefined();
-				expect(me.is_bot).toBe(true);
-			});
-
-			test("should set and get commands", async () => {
-				const testCommands = [
-					{ command: "test_start", description: "Test start command" },
-					{ command: "test_help", description: "Test help command" },
-				];
-
-				await bot.api.setMyCommands(testCommands);
-				const commands = await bot.api.getMyCommands();
-
-				expect(commands).toHaveLength(2);
-				expect(commands[0].command).toBe("test_start");
-			});
-
-			test("should handle webhook info", async () => {
-				const webhookInfo = await bot.api.getWebhookInfo();
-				expect(webhookInfo).toBeDefined();
-				// Should either have a URL or not be set
-				expect(typeof webhookInfo.url).toBe("string");
-			});
-
-			test("should handle rate limits gracefully", async () => {
-				// Make multiple rapid requests
-				const promises = [];
-				for (let i = 0; i < 5; i++) {
-					promises.push(bot.api.getMe());
-				}
-
-				// Should not throw, auto-retry handles rate limits
-				const results = await Promise.all(promises);
-				expect(results).toHaveLength(5);
-				results.forEach((result) => {
-					expect(result.is_bot).toBe(true);
+				afterEach(() => {
+					// Clean up
+					bot.stop();
 				});
-			});
-		});
+
+				test("should get bot info", async () => {
+					const me = await bot.api.getMe();
+					expect(me).toBeDefined();
+					expect(me.id).toBeDefined();
+					expect(me.first_name).toBeDefined();
+					expect(me.username).toBeDefined();
+					expect(me.is_bot).toBe(true);
+				});
+
+				test("should set and get commands", async () => {
+					const testCommands = [
+						{ command: "test_start", description: "Test start command" },
+						{ command: "test_help", description: "Test help command" },
+					];
+
+					await bot.api.setMyCommands(testCommands);
+					const commands = await bot.api.getMyCommands();
+
+					expect(commands).toHaveLength(2);
+					expect(commands[0].command).toBe("test_start");
+				});
+
+				test("should handle webhook info", async () => {
+					const webhookInfo = await bot.api.getWebhookInfo();
+					expect(webhookInfo).toBeDefined();
+					// Should either have a URL or not be set
+					expect(typeof webhookInfo.url).toBe("string");
+				});
+
+				test("should handle rate limits gracefully", async () => {
+					// Make multiple rapid requests
+					const promises = [];
+					for (let i = 0; i < 5; i++) {
+						promises.push(bot.api.getMe());
+					}
+
+					// Should not throw, auto-retry handles rate limits
+					const results = await Promise.all(promises);
+					expect(results).toHaveLength(5);
+					results.forEach((result) => {
+						expect(result.is_bot).toBe(true);
+					});
+				});
+			},
+		);
 	});
 
 	describe("Error Handling", () => {
 		test("should handle network errors", async () => {
+			// Point at a closed local port so the request fails fast with a
+			// connection error, without depending on DNS resolution (which is
+			// non-deterministic and can hang in some environments).
 			const bot = new Bot(CONFIG.TOKEN, {
 				client: {
-					apiRoot: "https://invalid.telegram.api.test",
+					apiRoot: "http://127.0.0.1:1",
 				},
 			});
 
