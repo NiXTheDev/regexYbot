@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll } from "bun:test";
+import { describe, test, expect, beforeAll, beforeEach } from "bun:test";
 import { SQL } from "bun";
 import { DatabaseService } from "../database";
 import { CONFIG } from "../config";
@@ -31,6 +31,13 @@ describe("DatabaseService", () => {
 		dbService = new DatabaseService(db);
 	});
 
+	beforeEach(async () => {
+		// Reset fixtures so each test is independent of execution order
+		// (`bun test --randomize`) and of repeated runs (`--rerun-each`).
+		await db`DELETE FROM message_history`;
+		await db`DELETE FROM bot_replies`;
+	});
+
 	describe("storeMessageInHistory", () => {
 		test("should store a message in history", async () => {
 			await dbService.storeMessageInHistory(12345, 100, "Hello world");
@@ -45,7 +52,7 @@ describe("DatabaseService", () => {
 			await dbService.storeMessageInHistory(12345, 101, undefined);
 
 			const messages = await dbService.findMessagesInHistory(12345);
-			expect(messages.length).toBe(2);
+			expect(messages.length).toBe(1);
 			const msg = messages.find((m) => m.message_id === 101);
 			expect(msg?.text).toBe("");
 		});
@@ -55,7 +62,7 @@ describe("DatabaseService", () => {
 			await dbService.storeMessageInHistory(12345, 100, "Updated");
 
 			const messages = await dbService.findMessagesInHistory(12345);
-			expect(messages.length).toBe(2);
+			expect(messages.length).toBe(1);
 			const msg = messages.find((m) => m.message_id === 100);
 			expect(msg?.text).toBe("Updated");
 		});
