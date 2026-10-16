@@ -111,8 +111,17 @@ jobs:
           echo "Version: $VERSION"
           echo "Branch: $BRANCH"
 
-          # Build suffix list based on branch
-          if [ "$BRANCH" = "release" ]; then
+          # Detect prerelease: a SemVer carrying a hyphen (e.g. 0.3.0-rc1)
+          IS_PRERELEASE=0
+          case "$VERSION" in
+            *-*) IS_PRERELEASE=1 ;;
+          esac
+
+          # Build suffix list based on prerelease status and branch
+          if [ "$IS_PRERELEASE" = "1" ]; then
+            echo "Building for prerelease: $VERSION"
+            SUFFIXES="latest,dev,${VERSION},preview"
+          elif [ "$BRANCH" = "release" ]; then
             echo "Building for release branch (stable release)"
             SUFFIXES="latest,release"
             if [ "$VERSION" != "latest" ]; then

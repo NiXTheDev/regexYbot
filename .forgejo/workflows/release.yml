@@ -91,6 +91,21 @@ jobs:
           API="https://hangar.nixthedev.ru/api/v1/repos/${{ github.repository }}"
           AUTH="Authorization: token ${{ secrets.GITHUB_TOKEN }}"
 
+          # Target branch: PR base for merged release PRs, otherwise the ref
+          BRANCH="${{ github.event.pull_request.base_ref }}"
+          if [ -z "$BRANCH" ]; then BRANCH="${{ github.ref_name }}"; fi
+
+          # Detect prerelease: a SemVer carrying a hyphen (e.g. 0.3.0-rc1)
+          IS_PRERELEASE=0
+          case "$VERSION" in
+            *-*) IS_PRERELEASE=1 ;;
+          esac
+
+          PRERELEASE_FLAG=""
+          if [ "$IS_PRERELEASE" = "1" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
           # Delete existing release if present (re-run safety)
           EXISTING_ID=$(curl -s -H "$AUTH" "$API/releases/tags/$TAG" | jq -r '.id // empty')
           if [ -n "$EXISTING_ID" ]; then
@@ -117,7 +132,8 @@ jobs:
           fj auth add-token -H hangar.nixthedev.ru "${{ secrets.GITHUB_TOKEN }}"
           fj release create "Release $TAG" \
             --create-tag "$TAG" \
-            --branch release \
+            --branch "$BRANCH" \
+            $PRERELEASE_FLAG \
             --body "$RELEASE_BODY" \
             --attach dist/regexybot-linux-x64.tar.gz \
             --attach dist/regexybot-linux-arm64.tar.gz \
