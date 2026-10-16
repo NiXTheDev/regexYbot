@@ -75,67 +75,64 @@ describe("Telegram API Integration", () => {
 		const token = process.env.TOKEN ?? "";
 		const haveToken = !!token;
 
-		(haveToken ? describe : describe.skip)(
-			"With Real Staging Bot",
-			() => {
-				let bot: Bot;
+		(haveToken ? describe : describe.skip)("With Real Staging Bot", () => {
+			let bot: Bot;
 
-				beforeEach(() => {
-					bot = new Bot(token, {
-						client: { apiRoot: CONFIG.BASE_URL },
-					});
+			beforeEach(() => {
+				bot = new Bot(token, {
+					client: { apiRoot: CONFIG.BASE_URL },
 				});
+			});
 
-				afterEach(() => {
-					// Clean up
-					bot.stop();
+			afterEach(() => {
+				// Clean up
+				bot.stop();
+			});
+
+			test("should get bot info", async () => {
+				const me = await bot.api.getMe();
+				expect(me).toBeDefined();
+				expect(me.id).toBeDefined();
+				expect(me.first_name).toBeDefined();
+				expect(me.username).toBeDefined();
+				expect(me.is_bot).toBe(true);
+			});
+
+			test("should set and get commands", async () => {
+				const testCommands = [
+					{ command: "test_start", description: "Test start command" },
+					{ command: "test_help", description: "Test help command" },
+				];
+
+				await bot.api.setMyCommands(testCommands);
+				const commands = await bot.api.getMyCommands();
+
+				expect(commands).toHaveLength(2);
+				expect(commands[0].command).toBe("test_start");
+			});
+
+			test("should handle webhook info", async () => {
+				const webhookInfo = await bot.api.getWebhookInfo();
+				expect(webhookInfo).toBeDefined();
+				// Should either have a URL or not be set
+				expect(typeof webhookInfo.url).toBe("string");
+			});
+
+			test("should handle rate limits gracefully", async () => {
+				// Make multiple rapid requests
+				const promises = [];
+				for (let i = 0; i < 5; i++) {
+					promises.push(bot.api.getMe());
+				}
+
+				// Should not throw, auto-retry handles rate limits
+				const results = await Promise.all(promises);
+				expect(results).toHaveLength(5);
+				results.forEach((result) => {
+					expect(result.is_bot).toBe(true);
 				});
-
-				test("should get bot info", async () => {
-					const me = await bot.api.getMe();
-					expect(me).toBeDefined();
-					expect(me.id).toBeDefined();
-					expect(me.first_name).toBeDefined();
-					expect(me.username).toBeDefined();
-					expect(me.is_bot).toBe(true);
-				});
-
-				test("should set and get commands", async () => {
-					const testCommands = [
-						{ command: "test_start", description: "Test start command" },
-						{ command: "test_help", description: "Test help command" },
-					];
-
-					await bot.api.setMyCommands(testCommands);
-					const commands = await bot.api.getMyCommands();
-
-					expect(commands).toHaveLength(2);
-					expect(commands[0].command).toBe("test_start");
-				});
-
-				test("should handle webhook info", async () => {
-					const webhookInfo = await bot.api.getWebhookInfo();
-					expect(webhookInfo).toBeDefined();
-					// Should either have a URL or not be set
-					expect(typeof webhookInfo.url).toBe("string");
-				});
-
-				test("should handle rate limits gracefully", async () => {
-					// Make multiple rapid requests
-					const promises = [];
-					for (let i = 0; i < 5; i++) {
-						promises.push(bot.api.getMe());
-					}
-
-					// Should not throw, auto-retry handles rate limits
-					const results = await Promise.all(promises);
-					expect(results).toHaveLength(5);
-					results.forEach((result) => {
-						expect(result.is_bot).toBe(true);
-					});
-				});
-			},
-		);
+			});
+		});
 	});
 
 	describe("Error Handling", () => {
