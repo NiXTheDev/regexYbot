@@ -8,7 +8,7 @@
 		"@grammyjs/hydrate": "^1.7.0",
 		"@grammyjs/i18n": "^1.1.2",
 		"@grammyjs/runner": "^2.0.3",
-		"grammy": "^1.45.1"
+		"grammy": "npm:@jsr/grammyjs__grammy@2.0.0-beta.6"
 	},
 	"devDependencies": {
 		"@bun-security-scanner/osv": "^1.0.0",

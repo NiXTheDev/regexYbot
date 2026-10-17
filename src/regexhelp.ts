@@ -4,7 +4,7 @@
  * Provides /regexhelp command with category/item selection via custom keyboards
  */
 
-import { InlineKeyboard } from "grammy";
+import { InlineKeyboard } from "grammy/keyboard";
 import { escapeMarkdownV2 } from "./utils";
 
 export interface RegexHelpItem {

@@ -258,7 +258,10 @@ describe("SedHandler dangerous pattern warning", () => {
 			text: string;
 			options?: Record<string, unknown>;
 		}> = [];
-		const reply = async (text: string, options?: Record<string, unknown>) => {
+		const sendMessage = async (
+			text: string,
+			options?: Record<string, unknown>,
+		) => {
 			replyCalls.push({ text, options });
 			if (replyImpl) return replyImpl();
 			return { message_id: 1 };
@@ -267,7 +270,7 @@ describe("SedHandler dangerous pattern warning", () => {
 		const ctx = {
 			chat: { id: 123, type: chatType },
 			from: { id: 456 },
-			reply,
+			sendMessage,
 			api: { sendMessage: async () => ({ message_id: 1 }) },
 		} as unknown as MyContext;
 

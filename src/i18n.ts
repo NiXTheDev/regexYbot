@@ -5,7 +5,7 @@
  */
 
 import { I18n, type I18nFlavor } from "@grammyjs/i18n";
-import type { Context, SessionFlavor } from "grammy";
+import type { Context } from "grammy";
 import type { CommandsFlavor } from "@grammyjs/commands";
 import type { HydrateFlavor } from "@grammyjs/hydrate";
 import path from "node:path";
@@ -15,10 +15,11 @@ export interface SessionData {
 	__language_code?: string;
 }
 
-// Context type with i18n and session support
-export type MyContext = HydrateFlavor<
-	Context & CommandsFlavor & I18nFlavor & SessionFlavor<SessionData>
->;
+// Context type with i18n and session support.
+// grammY v2 no longer ships a `session` flavor, so the session flavor has been
+// dropped from the context type. Locale is resolved per update via i18n's
+// locale negotiator (see the `useLocale` call sites in index.ts).
+export type MyContext = HydrateFlavor<Context & CommandsFlavor & I18nFlavor>;
 
 /**
  * Available language codes
@@ -67,7 +68,7 @@ export const AVAILABLE_LANGUAGES: Language[] = [
  */
 export const i18n = new I18n<MyContext>({
 	defaultLocale: "en",
-	useSession: true, // Store user language preference in session
+	useSession: false, // grammY v2 core no longer provides a session plugin
 	directory: path.resolve("src/locales"), // Load .ftl files from src/locales/
 });
 

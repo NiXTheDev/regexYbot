@@ -1,6 +1,6 @@
 import { CommandGroup, commands } from "@grammyjs/commands";
 import { hydrate } from "@grammyjs/hydrate";
-import { InlineKeyboard } from "grammy";
+import { InlineKeyboard } from "grammy/keyboard";
 import {
 	computeDiff,
 	computeDiffMarkdown,
@@ -10,7 +10,7 @@ import {
 import { run } from "@grammyjs/runner";
 import { SQL } from "bun";
 import { writeFileSync } from "node:fs";
-import { Bot, GrammyError, InputFile, session } from "grammy";
+import { Bot, BotApiError, InputFile } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { CONFIG } from "./config";
 import { Logger, withCorrelation } from "./logger";
@@ -67,7 +67,7 @@ const bot = new Bot<MyContext>(TOKEN, { client: { apiRoot: BASE_URL } });
 bot.use(hydrate());
 
 // --- Rate Limiting & Retry Configuration ---
-bot.api.config.use(
+bot.api.transform(
 	autoRetry({
 		maxRetryAttempts: RETRY_MAX_RETRIES,
 		maxDelaySeconds: RETRY_MAX_DELAY_MS / 1000,
@@ -76,12 +76,7 @@ bot.api.config.use(
 
 bot.use(commands());
 
-// --- Session & i18n Setup ---
-bot.use(
-	session({
-		initial: () => ({}),
-	}),
-);
+// --- i18n Setup ---
 bot.use(i18n);
 
 // --- Rate Limiting ---
@@ -216,7 +211,7 @@ if (RATE_LIMIT_ENABLED) {
 		if (userData.count + cost > RATE_LIMIT_COMMANDS_PER_MINUTE) {
 			const remaining = Math.ceil((userData.resetTime - now) / 1000);
 			logger.debug(`User ${userId} rate limited. Retry after ${remaining}s`);
-			await ctx.reply(ctx.t("errors.rateLimit", { seconds: remaining }));
+			await ctx.sendMessage(ctx.t("errors.rateLimit", { seconds: remaining }));
 			return; // Don't process the command
 		}
 
@@ -349,7 +344,7 @@ async function sendOrEditReply(
 					return;
 				} catch (e) {
 					if (
-						e instanceof GrammyError &&
+						e instanceof BotApiError &&
 						e.description.includes("message is not modified")
 					) {
 						logger.debug("Edit failed: message not modified, ignoring.");
@@ -380,7 +375,7 @@ async function sendOrEditReply(
 	} catch (error) {
 		// Convert to TelegramAPIError for consistent handling
 		const telegramError =
-			error instanceof GrammyError
+			error instanceof BotApiError
 				? new TelegramAPIError(
 						error.description,
 						"sendMessage",
@@ -394,7 +389,7 @@ async function sendOrEditReply(
 		// Only show user message for non-retryable errors
 		if (!telegramError.retryable) {
 			try {
-				await ctx.reply(telegramError.getUserMessage());
+				await ctx.sendMessage(telegramError.getUserMessage());
 			} catch {
 				// Ignore reply errors
 			}
@@ -466,7 +461,7 @@ async function handleTextMessage(
 			logger.info("No target found for sed command.");
 			if (!isEdit) {
 				await ctx
-					.reply("Could not find a matching message to substitute.")
+					.sendMessage("Could not find a matching message to substitute.")
 					.catch((err) => logger.error(err));
 			}
 		} else {
@@ -485,40 +480,42 @@ myCommands.command("privacy", "Show privacy information", async (ctx) => {
 			const locale = await ctx.i18n.getLocale();
 			const target = userLang.toLowerCase();
 			if (locale !== target) {
-				await ctx.i18n.setLocale(target);
+				ctx.i18n.useLocale(target);
 			}
 		} catch {
 			// Fall back to current locale if switching fails
 		}
 	}
-	await ctx.reply(ctx.t("command-privacy"));
+	await ctx.sendMessage(ctx.t("command-privacy"));
 });
 myCommands.command("start", "Get a greeting message", async (ctx) => {
-	await ctx.reply(ctx.t("command-start"), { parse_mode: "Markdown" });
+	await ctx.sendMessage(ctx.t("command-start"), { parse_mode: "Markdown" });
 });
 
 myCommands.command("regexhelp", "Get help with regex syntax", async (ctx) => {
-	await ctx.reply(getMainHelpMessage(), {
+	await ctx.sendMessage(getMainHelpMessage(), {
 		parse_mode: "MarkdownV2",
 		reply_markup: createCategoryKeyboard(),
 	});
 });
 
 myCommands.command("explain", "Explain a regex pattern", async (ctx) => {
-	const pattern = ctx.match.trim();
+	const pattern = String(ctx.match ?? "").trim();
 	const explanation = explainPattern(pattern);
-	await ctx.reply(explanation, { parse_mode: "MarkdownV2" });
+	await ctx.sendMessage(explanation, { parse_mode: "MarkdownV2" });
 });
 
 myCommands.command("language", "Change bot language", async (ctx) => {
-	const args = ctx.match.trim().split(/\s+/);
+	const args = String(ctx.match ?? "")
+		.trim()
+		.split(/\s+/);
 	const subcommand = args[0]?.toLowerCase();
 
 	if (!subcommand || subcommand === "") {
 		// Show current language
 		const currentLang = await ctx.i18n.getLocale();
 		const langInfo = getLanguageInfo(currentLang);
-		await ctx.reply(
+		await ctx.sendMessage(
 			ctx.t("command-language-current", {
 				language: langInfo?.nativeName || currentLang,
 			}),
@@ -528,7 +525,7 @@ myCommands.command("language", "Change bot language", async (ctx) => {
 
 	if (subcommand === "list") {
 		// Show available languages
-		await ctx.reply(
+		await ctx.sendMessage(
 			ctx.t("command-language-list", {
 				languages: formatLanguageList(),
 			}),
@@ -539,14 +536,14 @@ myCommands.command("language", "Change bot language", async (ctx) => {
 	if (subcommand === "set" && args[1]) {
 		const langCode = args[1].toLowerCase();
 		if (!isSupportedLanguage(langCode)) {
-			await ctx.reply(ctx.t("command-language-setError"));
+			await ctx.sendMessage(ctx.t("command-language-setError"));
 			return;
 		}
 
 		const currentLang = await ctx.i18n.getLocale();
 		if (currentLang === langCode) {
 			const langInfo = getLanguageInfo(langCode);
-			await ctx.reply(
+			await ctx.sendMessage(
 				ctx.t("command-language-current", {
 					language: langInfo?.nativeName || langCode,
 				}),
@@ -554,9 +551,9 @@ myCommands.command("language", "Change bot language", async (ctx) => {
 			return;
 		}
 
-		await ctx.i18n.setLocale(langCode);
+		ctx.i18n.useLocale(langCode);
 		const langInfo = getLanguageInfo(langCode);
-		await ctx.reply(
+		await ctx.sendMessage(
 			ctx.t("command-language-setSuccess", {
 				language: langInfo?.nativeName || langCode,
 			}),
@@ -565,12 +562,12 @@ myCommands.command("language", "Change bot language", async (ctx) => {
 	}
 
 	// Invalid usage
-	await ctx.reply(ctx.t("command-language-usage"));
+	await ctx.sendMessage(ctx.t("command-language-usage"));
 });
 
 myCommands.command("health", "Show bot health status", async (ctx) => {
 	const metrics = getMetrics(workerPool);
-	await ctx.reply(formatHealthStatus(metrics));
+	await ctx.sendMessage(formatHealthStatus(metrics));
 });
 
 myCommands.command("version", "Show bot version", async (ctx) => {
@@ -582,12 +579,12 @@ myCommands.command("version", "Show bot version", async (ctx) => {
 ## Changes
 
 ${CHANGES ?? "No changes available"}`;
-	await ctx.replyWithRichMessage({ markdown: richContent });
+	await ctx.sendRichMessage({ markdown: richContent });
 });
 
 myCommands.command("metrics", "Show performance metrics", async (ctx) => {
 	const metrics = getMetrics(workerPool);
-	await ctx.reply(formatMetrics(metrics));
+	await ctx.sendMessage(formatMetrics(metrics));
 });
 
 // /diff: Show diff for the last sed substitution
@@ -597,27 +594,28 @@ myCommands.command(
 	"Show diff for the last sed substitution. Usage: /diff [plain|true|image]",
 	async (ctx) => {
 		// Parse format argument from command
-		const formatArg = (ctx.match as string)?.trim().toLowerCase() as
-			DiffFormat | undefined;
+		const formatArg = String(ctx.match ?? "")
+			.trim()
+			.toLowerCase() as DiffFormat | undefined;
 		const format: DiffFormat =
 			formatArg && ["plain", "true", "image"].includes(formatArg)
 				? formatArg
 				: "plain";
 
 		if (formatArg && !["plain", "true", "image"].includes(formatArg)) {
-			await ctx.reply("Usage: /diff [plain|true|image]");
+			await ctx.sendMessage("Usage: /diff [plain|true|image]");
 			return;
 		}
 
 		// Ensure the command is used in reply to a bot's sed response
 		const replyTo = ctx.msg?.reply_to_message;
 		if (!replyTo) {
-			await ctx.reply("Please use /diff in reply to the bot's response");
+			await ctx.sendMessage("Please use /diff in reply to the bot's response");
 			return;
 		}
 		const chatId = ctx.chat?.id;
 		if (chatId === undefined) {
-			await ctx.reply("Original command not found");
+			await ctx.sendMessage("Original command not found");
 			return;
 		}
 		const botMessageId = replyTo.message_id;
@@ -628,7 +626,7 @@ myCommands.command(
 			}[]);
 		const targetMessageId = mappingRows?.[0]?.target_message_id;
 		if (!targetMessageId) {
-			await ctx.reply("Original command not found");
+			await ctx.sendMessage("Original command not found");
 			return;
 		}
 		// Fetch the original text from message_history
@@ -640,7 +638,7 @@ myCommands.command(
 		// Fetch the sed command used for this target
 		const sedCommand = await dbService.getSedCommand(targetMessageId, chatId);
 		if (!sedCommand) {
-			await ctx.reply("Original command not found");
+			await ctx.sendMessage("Original command not found");
 			return;
 		}
 
@@ -659,11 +657,9 @@ myCommands.command(
 				keyboard.row(
 					InlineKeyboard.text("Hide diff", `diff:hide:${diffMessageId}`),
 				);
-				await ctx.api.editMessageReplyMarkup(chatId, diffMessageId, {
-					reply_markup: keyboard,
-				});
+				await ctx.api.editMessageReplyMarkup(chatId, diffMessageId, keyboard);
 			} catch {
-				await ctx.reply("Failed to send diff image");
+				await ctx.sendMessage("Failed to send diff image");
 			}
 		} else if (format === "true") {
 			// Compute markdown diff
@@ -677,9 +673,7 @@ myCommands.command(
 				keyboard.row(
 					InlineKeyboard.text("Hide diff", `diff:hide:${diffMessageId}`),
 				);
-				await ctx.api.editMessageReplyMarkup(chatId, diffMessageId, {
-					reply_markup: keyboard,
-				});
+				await ctx.api.editMessageReplyMarkup(chatId, diffMessageId, keyboard);
 			} catch {
 				await ctx.api.sendMessage(chatId, diffText, {
 					parse_mode: "MarkdownV2",
@@ -697,9 +691,7 @@ myCommands.command(
 				keyboard.row(
 					InlineKeyboard.text("Hide diff", `diff:hide:${diffMessageId}`),
 				);
-				await ctx.api.editMessageReplyMarkup(chatId, diffMessageId, {
-					reply_markup: keyboard,
-				});
+				await ctx.api.editMessageReplyMarkup(chatId, diffMessageId, keyboard);
 			} catch {
 				await ctx.api.sendMessage(chatId, diffText, {
 					parse_mode: "MarkdownV2",
@@ -896,5 +888,8 @@ bot.use(async (_, next) => {
 	await next();
 	await dbService.cleanupOldEntries();
 });
-run(bot);
+// grammY v2 changed the `Api.getUpdates` signature (AbortSignal handling),
+// which the published `@grammyjs/runner` v1 types do not model yet. Runtime
+// behaviour is unchanged. Upstream tracking: grammyjs/runner#28.
+run(bot as unknown as Parameters<typeof run>[0]);
 logger.info(`regexY v${VERSION} (${COMMIT}) started successfully!`);

@@ -313,7 +313,7 @@ export class SedHandler {
 						const isGroupChat =
 							ctx.chat?.type === "group" || ctx.chat?.type === "supergroup";
 						try {
-							await ctx.reply(escapeMarkdownV2(warning), {
+							await ctx.sendMessage(escapeMarkdownV2(warning), {
 								parse_mode: "MarkdownV2",
 								receiver_user_id: isGroupChat ? ctx.from?.id : undefined,
 							});
@@ -335,7 +335,7 @@ export class SedHandler {
 				};
 				const result = await this.deps.workerPool.run(task);
 				if (result.error) {
-					await ctx.reply(`Error during substitution: ${result.error}`);
+					await ctx.sendMessage(`Error during substitution: ${result.error}`);
 					return;
 				}
 				currentText = result.result;
@@ -371,7 +371,7 @@ export class SedHandler {
 					);
 				}
 
-				await ctx.reply(botError.getUserMessage());
+				await ctx.sendMessage(botError.getUserMessage());
 				return;
 			}
 		}
@@ -421,7 +421,7 @@ export class SedHandler {
 
 		// Send separate performance message if needed
 		if (performanceText) {
-			const sentPerfMsg = await ctx.reply(performanceText);
+			const sentPerfMsg = await ctx.sendMessage(performanceText);
 			// Store tracking info for edit handling
 			const chatId = ctx.chat?.id;
 			if (chatId) {
