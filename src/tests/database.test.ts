@@ -24,6 +24,7 @@ describe("DatabaseService", () => {
 				target_message_id INTEGER NOT NULL,
 				chat_id INTEGER NOT NULL,
 				bot_message_id INTEGER NOT NULL,
+				sed_command TEXT,
 				timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
 				PRIMARY KEY (target_message_id, chat_id)
 			)
@@ -104,6 +105,38 @@ describe("DatabaseService", () => {
 		test("should return undefined for non-existent mapping", async () => {
 			const replyId = await dbService.getBotReplyMessageId(99999, 12345);
 			expect(replyId).toBeUndefined();
+		});
+
+		test("should store and retrieve the sed command", async () => {
+			await dbService.storeBotReplyMapping(100, 12345, 200, "s/foo/bar/gi");
+
+			expect(await dbService.getSedCommand(100, 12345)).toBe("s/foo/bar/gi");
+		});
+
+		test("should store and retrieve a multi-line sed command chain", async () => {
+			await dbService.storeBotReplyMapping(
+				100,
+				12345,
+				200,
+				"s/foo/bar/\ns/baz/qux/",
+			);
+
+			expect(await dbService.getSedCommand(100, 12345)).toBe(
+				"s/foo/bar/\ns/baz/qux/",
+			);
+		});
+
+		test("should return undefined sed command when none was recorded", async () => {
+			await dbService.storeBotReplyMapping(100, 12345, 200);
+
+			expect(await dbService.getSedCommand(100, 12345)).toBeUndefined();
+		});
+
+		test("should update the sed command when the mapping is replaced", async () => {
+			await dbService.storeBotReplyMapping(100, 12345, 200, "s/foo/bar/");
+			await dbService.storeBotReplyMapping(100, 12345, 200, "s/baz/qux/");
+
+			expect(await dbService.getSedCommand(100, 12345)).toBe("s/baz/qux/");
 		});
 	});
 

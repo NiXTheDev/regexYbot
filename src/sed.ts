@@ -239,6 +239,7 @@ export interface SedHandlerDependencies {
 		ctx: MyContext,
 		targetMsgId: number,
 		messageText: string,
+		sedCommand: string,
 		isEdit: boolean,
 		linkPreviewDisabled?: boolean,
 	) => Promise<void>;
@@ -406,10 +407,15 @@ export class SedHandler {
 			// If doesn't fit, performanceText remains non-null for separate message
 		}
 
+		// Persist the sed command so `/diff` can reconstruct it later.
+		// `join("\n")` round-trips through `parseSedCommands`: a command only
+		// starts on a line beginning with `s/`, and continuation lines can never
+		// begin with `s/` (they would have started a new command instead).
 		await this.deps.sendOrEditReply(
 			ctx,
 			targetMsgId,
 			escapeMarkdownV2(resultText),
+			sedCommands.join("\n"),
 			isEdit,
 			linkPreviewDisabled,
 		);

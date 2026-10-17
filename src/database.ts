@@ -183,10 +183,15 @@ export class DatabaseService {
 		targetMessageId: number,
 		chatId: number,
 	): Promise<string | undefined> {
+		// `sed_command` is nullable in the schema, so SQLite yields null for rows
+		// recorded without a command — normalize it to undefined to match the
+		// declared return type.
 		return (
-			await this
-				.db`SELECT sed_command FROM bot_replies WHERE target_message_id = ${targetMessageId} AND chat_id = ${chatId}`
-		)[0]?.sed_command;
+			(
+				await this
+					.db`SELECT sed_command FROM bot_replies WHERE target_message_id = ${targetMessageId} AND chat_id = ${chatId}`
+			)[0]?.sed_command ?? undefined
+		);
 	}
 
 	async findMessagesInHistory(

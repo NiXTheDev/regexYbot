@@ -285,15 +285,22 @@ describe("SedHandler dangerous pattern warning", () => {
 		const sendOrEditReplyCalls: Array<{
 			targetMsgId: number;
 			messageText: string;
+			sedCommand: string;
 			isEdit: boolean;
 		}> = [];
 		const sendOrEditReply = async (
 			_ctx: MyContext,
 			targetMsgId: number,
 			messageText: string,
+			sedCommand: string,
 			isEdit: boolean,
 		) => {
-			sendOrEditReplyCalls.push({ targetMsgId, messageText, isEdit });
+			sendOrEditReplyCalls.push({
+				targetMsgId,
+				messageText,
+				sedCommand,
+				isEdit,
+			});
 		};
 
 		const handler = new SedHandler({ workerPool, sendOrEditReply });
@@ -316,6 +323,9 @@ describe("SedHandler dangerous pattern warning", () => {
 		expect(runTracker.count).toBe(1);
 		expect(sendOrEditReplyCalls).toHaveLength(1);
 		expect(sendOrEditReplyCalls[0].messageText).toBe("substituted text");
+		// Regression: the sed command must be threaded through to the reply
+		// mapping so `/diff` can reconstruct it later.
+		expect(sendOrEditReplyCalls[0].sedCommand).toBe(dangerousCommand);
 	});
 
 	test("omits receiver_user_id in private chat warning", async () => {

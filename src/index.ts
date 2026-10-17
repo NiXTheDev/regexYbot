@@ -267,6 +267,7 @@ try {
       target_message_id INTEGER NOT NULL,
       chat_id INTEGER NOT NULL,
       bot_message_id INTEGER NOT NULL,
+      sed_command TEXT,
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (target_message_id, chat_id)
     )
@@ -307,6 +308,7 @@ async function sendOrEditReply(
 	ctx: MyContext,
 	targetMsgId: number,
 	messageText: string,
+	sedCommand: string,
 	isEdit: boolean = false,
 	linkPreviewDisabled?: boolean,
 ): Promise<void> {
@@ -334,6 +336,7 @@ async function sendOrEditReply(
 						targetMsgId,
 						ctx.chat!.id,
 						previousBotReplyId,
+						sedCommand,
 					);
 					await dbService.storeBotReplyInHistory(
 						ctx.chat!.id,
@@ -365,6 +368,7 @@ async function sendOrEditReply(
 			targetMsgId,
 			ctx.chat!.id,
 			sentMsg.message_id,
+			sedCommand,
 		);
 		await dbService.storeBotReplyInHistory(
 			ctx.chat!.id,
