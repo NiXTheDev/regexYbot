@@ -144,7 +144,7 @@ describe("Configuration", () => {
 	describe("Configuration immutability", () => {
 		test("should not be modifiable", () => {
 			expect(() => {
-				(CONFIG as unknown as Record<string, unknown>).TOKEN = "modified";
+				(CONFIG as unknown as Record<string, unknown>)["TOKEN"] = "modified";
 			}).toThrow();
 		});
 	});

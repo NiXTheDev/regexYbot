@@ -319,7 +319,7 @@ describe("SedHandler dangerous pattern warning", () => {
 			false,
 		);
 		expect(replyCalls).toHaveLength(1);
-		expect(replyCalls[0].options?.receiver_user_id).toBe(456);
+		expect(replyCalls[0].options?.["receiver_user_id"]).toBe(456);
 		expect(runTracker.count).toBe(1);
 		expect(sendOrEditReplyCalls).toHaveLength(1);
 		expect(sendOrEditReplyCalls[0].messageText).toBe("substituted text");
@@ -338,7 +338,7 @@ describe("SedHandler dangerous pattern warning", () => {
 			false,
 		);
 		expect(replyCalls).toHaveLength(1);
-		expect(replyCalls[0].options?.receiver_user_id).toBeUndefined();
+		expect(replyCalls[0].options?.["receiver_user_id"]).toBeUndefined();
 	});
 
 	test("continues substitution when warning reply fails", async () => {

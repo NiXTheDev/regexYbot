@@ -5,7 +5,7 @@ import { CONFIG } from "../config";
 // Live integration tests hit a real Telegram API server. They are opt-in so the
 // default `bun test` run stays hermetic and deterministic (no network, DNS, or
 // staging-server dependency). Enable them explicitly with LIVE_API_TESTS=1.
-const LIVE_API_TESTS = !!process.env.LIVE_API_TESTS;
+const LIVE_API_TESTS = !!process.env["LIVE_API_TESTS"];
 
 describe("Telegram API Integration", () => {
 	describe("Bot Initialization", () => {
@@ -80,7 +80,7 @@ describe("Telegram API Integration", () => {
 
 	describe("Real API Tests (Staging)", () => {
 		// Opt-in (LIVE_API_TESTS=1) and requires TOKEN to be configured.
-		const token = process.env.TOKEN ?? "";
+		const token = process.env["TOKEN"] ?? "";
 		const haveToken = !!token;
 
 		(LIVE_API_TESTS && haveToken ? describe : describe.skip)(

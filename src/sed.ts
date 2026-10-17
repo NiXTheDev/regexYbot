@@ -178,8 +178,8 @@ function getSpecialDay(): RoastFn[] | null {
 	const date = now.getDate();
 	const day = now.getDay();
 
-	if (month === 3 && date === 1) return THEMED_ROASTS.aprilFools;
-	if (day === 5 && date === 13) return THEMED_ROASTS.friday13th;
+	if (month === 3 && date === 1) return THEMED_ROASTS["aprilFools"];
+	if (day === 5 && date === 13) return THEMED_ROASTS["friday13th"];
 	return null;
 }
 

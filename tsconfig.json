@@ -7,22 +7,26 @@
 		"esModuleInterop": true,
 		"skipLibCheck": true,
 		"outDir": "dist",
-		"noEmit": true
+		"noEmit": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noUncheckedSideEffectImports": true,
+		"noFallthroughCasesInSwitch": true,
+		"allowUnusedLabels": false,
+		"allowUnreachableCode": false,
+		"noPropertyAccessFromIndexSignature": true,
+		// "erasableSyntaxOnly": true, // not sure why do we need this but leave it here in case it's needed
+		"noImplicitOverride": true,
+		"noErrorTruncation": false // set to true when debugging to see full types, or by preference
+		// Enabled in a follow-up commit once the fallout is fixed:
+		// "noUncheckedIndexedAccess": true,
+		// Blocked until a v2 release of @grammyjs/hydrate exists: its v1 flavour
+		// widens Update.inline_query to `InlineQueryX | undefined`, which makes
+		// MyContext stop satisfying the `extends Context` constraint.
+		// "exactOptionalPropertyTypes": true // if ("name" in user) {} returns true even if user.name = undefined, name exists, it's all it cares about
+		// "allowJs": true, // uncomment both lines if using mixed JS/TS files
+		// "checkJs": true
 	},
 	"include": ["src"],
-	"exclude": ["node_modules"],
-	"noUnusedLocals": true,
-	"noUnusedParameters": true,
-	"noUncheckedSideEffectImports": true,
-	"noFallthroughCasesInSwitch": true,
-	"allowUnusedLabels": false,
-	"allowUnreachableCode": false,
-	"noUncheckedIndexedAccess": true,
-	"noPropertyAccessFromIndexSignature": true,
-	// "erasableSyntaxOnly": true, // not sure why do we need this but leave it here in case it's needed
-	"noImplicitOverride": true,
-	"noErrorTruncation": false, // set to true when debugging to see full types, or by preference
-	"exactOptionalPropertyTypes": true // if ("name" in user) {} returns true even if user.name = undefined, name exists, it's all it cares about
-	// "allowJs": true, // uncomment both lines if using mixed JS/TS files
-	// "checkJs": true
+	"exclude": ["node_modules"]
 }

@@ -12,7 +12,7 @@ import { isBotReady } from "../utils/healthCheck";
  * If TOKEN is not set, tests will be skipped
  */
 
-const TOKEN = process.env.TOKEN;
+const TOKEN = process.env["TOKEN"];
 const describeOrSkip = TOKEN ? describe : describe.skip;
 
 describeOrSkip("Graceful Shutdown Integration", () => {

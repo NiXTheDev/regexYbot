@@ -53,7 +53,7 @@ export class RegexError extends BotError {
 		this.flags = flags;
 	}
 
-	getUserMessage(): string {
+	override getUserMessage(): string {
 		return `❌ Invalid regex pattern. Check your syntax (escape special chars with \\) and try again.\n💡 Tip: Use \\/ to escape slashes, \\d for digits, \\w for word chars.`;
 	}
 }
@@ -84,7 +84,7 @@ export class TelegramAPIError extends BotError {
 		this.retryable = retryable;
 	}
 
-	getUserMessage(): string {
+	override getUserMessage(): string {
 		if (this.statusCode === 429) {
 			return "⏳ Rate limit hit. Too many requests - please wait a moment before trying again.";
 		}
@@ -114,7 +114,7 @@ export class RateLimitError extends BotError {
 		this.retryAfter = retryAfter;
 	}
 
-	getUserMessage(): string {
+	override getUserMessage(): string {
 		const seconds = Math.ceil(this.retryAfter / 1000);
 		return `⏳ You're sending commands too fast. Please wait ${seconds} second${seconds !== 1 ? "s" : ""}.`;
 	}
@@ -139,7 +139,7 @@ export class WorkerError extends BotError {
 		this.workerId = workerId;
 	}
 
-	getUserMessage(): string {
+	override getUserMessage(): string {
 		return `🔧 Processing error. Try a simpler pattern or reduce the text length.\n💡 Avoid nested quantifiers (like .*) and very long replacements.`;
 	}
 }
@@ -163,7 +163,7 @@ export class CircuitBreakerError extends BotError {
 		this.openUntil = openUntil;
 	}
 
-	getUserMessage(): string {
+	override getUserMessage(): string {
 		const seconds = Math.ceil(Math.max(0, this.openUntil - Date.now()) / 1000);
 		const retryMsg =
 			seconds > 0

@@ -164,15 +164,15 @@ function resolveFromRawGit(): VersionInfo | null {
 // ============================================================
 
 function resolveFromEnv(): VersionInfo | null {
-	const version = process.env.VERSION;
-	const commit = process.env.COMMIT;
+	const version = process.env["VERSION"];
+	const commit = process.env["COMMIT"];
 	if (version && commit) {
 		return {
 			version,
 			commit,
 			releasedAt:
-				process.env.RELEASED_AT ?? new Date().toISOString().split("T")[0],
-			changes: process.env.CHANGES ?? null,
+				process.env["RELEASED_AT"] ?? new Date().toISOString().split("T")[0],
+			changes: process.env["CHANGES"] ?? null,
 		};
 	}
 	return null;

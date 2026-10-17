@@ -446,12 +446,12 @@ async function handleTextMessage(
 			logger.debug(
 				`Found valid target. Proceeding with handleSedCommand (isEdit: ${isEdit}).`,
 			);
+			const linkPreviewOptions = extras?.["link_preview_options"];
 			const linkPreviewDisabled =
-				extras?.link_preview_options &&
-				typeof extras.link_preview_options === "object" &&
-				"is_disabled" in extras.link_preview_options
-					? (extras.link_preview_options as { is_disabled: boolean })
-							.is_disabled
+				linkPreviewOptions &&
+				typeof linkPreviewOptions === "object" &&
+				"is_disabled" in linkPreviewOptions
+					? (linkPreviewOptions as { is_disabled: boolean }).is_disabled
 					: undefined;
 			await sedHandler.handleSedCommand(
 				ctx,

@@ -181,7 +181,7 @@ function parseStringEnv(key: string, defaultValue: string): string {
  * Helper function to parse and validate log level.
  */
 function parseLogLevel(): LogLevel {
-	const raw = process.env.LOG_LEVEL?.toLowerCase();
+	const raw = process.env["LOG_LEVEL"]?.toLowerCase();
 	if (!raw) {
 		// Default based on NODE_ENV
 		return process.env.NODE_ENV === "production" ? "info" : "debug";
@@ -223,7 +223,7 @@ function loadConfig(): BotConfig {
 	const nodeEnv = parseNodeEnv();
 
 	// Required: TOKEN (but not in test environment)
-	const token = process.env.TOKEN;
+	const token = process.env["TOKEN"];
 	if (!token && nodeEnv !== "test") {
 		console.error(
 			"[Config]: FATAL - TOKEN environment variable is required but not set.",
