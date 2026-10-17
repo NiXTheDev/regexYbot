@@ -36,7 +36,7 @@ const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf-8")) as {
 const FALLBACK: VersionInfo = {
 	version: pkg.version,
 	commit: "0000000",
-	releasedAt: new Date().toISOString().split("T")[0],
+	releasedAt: new Date().toISOString().slice(0, 10),
 	changes: null,
 };
 
@@ -64,7 +64,7 @@ function resolveFromGit(): VersionInfo | null {
 		return {
 			version: pkg.version,
 			commit,
-			releasedAt: new Date().toISOString().split("T")[0],
+			releasedAt: new Date().toISOString().slice(0, 10),
 			changes,
 		};
 	} catch {
@@ -100,7 +100,7 @@ function resolveGitDir(): {
 	const content = readGitFile(gitPath);
 	if (!content) return null;
 	const match = content.match(/^gitdir:\s*(.+)$/);
-	const workGitDir = match ? match[1] : gitPath;
+	const workGitDir = match?.[1] ?? gitPath;
 
 	const commonDirFile = join(workGitDir, "commondir");
 	const rel = readGitFile(commonDirFile);
@@ -119,9 +119,10 @@ function resolveHeadRaw(gitDir: string, commonDir: string): string | null {
 
 	// Symbolic ref — resolve it (refs live in commonDir)
 	const match = head.match(/^ref: (.+)$/);
-	if (!match) return null;
+	const ref = match?.[1];
+	if (!ref) return null;
 
-	return readGitFile(join(commonDir, match[1]));
+	return readGitFile(join(commonDir, ref));
 }
 
 function readCommitBodyRaw(hash: string, commonDir: string): string {
@@ -154,7 +155,7 @@ function resolveFromRawGit(): VersionInfo | null {
 	return {
 		version: pkg.version,
 		commit: commitHash.slice(0, 7),
-		releasedAt: new Date().toISOString().split("T")[0],
+		releasedAt: new Date().toISOString().slice(0, 10),
 		changes: readCommitBodyRaw(commitHash, dirs.commonDir) || null,
 	};
 }
@@ -171,7 +172,7 @@ function resolveFromEnv(): VersionInfo | null {
 			version,
 			commit,
 			releasedAt:
-				process.env["RELEASED_AT"] ?? new Date().toISOString().split("T")[0],
+				process.env["RELEASED_AT"] ?? new Date().toISOString().slice(0, 10),
 			changes: process.env["CHANGES"] ?? null,
 		};
 	}
@@ -190,7 +191,7 @@ function resolveFromVersionJson(): VersionInfo | null {
 			return {
 				version: parsed.version,
 				commit: parsed.commit,
-				releasedAt: parsed.releasedAt ?? new Date().toISOString().split("T")[0],
+				releasedAt: parsed.releasedAt ?? new Date().toISOString().slice(0, 10),
 				changes: parsed.changes ?? null,
 			};
 		}

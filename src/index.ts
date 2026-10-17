@@ -434,7 +434,7 @@ async function handleTextMessage(
 		const sedCommands = parseSedCommands(text);
 		logger.debug(`Found ${sedCommands.length} sed command(s).`);
 		if (sedCommands.length === 0) return;
-		const firstMatch = sedCommands[0].match(SED_PATTERN);
+		const firstMatch = sedCommands[0]?.match(SED_PATTERN);
 		if (!firstMatch) return;
 		const { targetMsgText, targetMsgId, extras } =
 			await dbService.findTargetMessage(

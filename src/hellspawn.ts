@@ -14,6 +14,9 @@ function processTask(task: TaskMessage, logger: Logger): ResultMessage {
 	try {
 		// We're now only processing a single command
 		const cmd = commands[0];
+		if (!cmd) {
+			throw new Error("No command supplied to worker");
+		}
 		logger.debug(`Applying: /${cmd.pattern}/${cmd.flags}/${cmd.replacement}/`);
 		const regex = new RegExp(cmd.pattern, cmd.flags);
 		currentText = currentText.replace(regex, cmd.replacement);

@@ -30,7 +30,7 @@ export function parsePattern(pattern: string): RegexToken[] {
 	let i = 0;
 
 	while (i < pattern.length) {
-		const char = pattern[i];
+		const char = pattern.charAt(i);
 
 		// Check for anchors
 		if (char === "^" && i === 0) {
@@ -55,7 +55,7 @@ export function parsePattern(pattern: string): RegexToken[] {
 
 		// Check for escaped characters
 		if (char === "\\" && i + 1 < pattern.length) {
-			const nextChar = pattern[i + 1];
+			const nextChar = pattern.charAt(i + 1);
 			const escapeToken = parseEscape(nextChar);
 			if (escapeToken) {
 				tokens.push(escapeToken);

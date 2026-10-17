@@ -136,7 +136,7 @@ export class DatabaseService {
 		}
 		const chatId = ctx.chat?.id;
 		if (chatId === undefined) return {};
-		const fr = match[1].replace(/\\\//g, "/");
+		const fr = (match[1] ?? "").replace(/\\\//g, "/");
 		const regex = new RegExp(fr, getRegexFlags(match[3]).flags);
 		const rows = await this
 			.db`SELECT message_id, text, extras FROM message_history WHERE chat_id = ${chatId} ${excludeMessageId ? sql`AND message_id != ${excludeMessageId}` : sql``} ORDER BY timestamp DESC LIMIT ${HISTORY_QUERY_LIMIT}`;

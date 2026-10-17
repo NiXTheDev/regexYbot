@@ -45,8 +45,8 @@ describe("Telegram API Integration", () => {
 
 			// Verify command structure
 			expect(commands).toHaveLength(2);
-			expect(commands[0].command).toBe("start");
-			expect(commands[0].description).toBe("Start the bot");
+			expect(commands[0]?.command).toBe("start");
+			expect(commands[0]?.description).toBe("Start the bot");
 		});
 
 		test("should handle message parsing", () => {
@@ -118,7 +118,7 @@ describe("Telegram API Integration", () => {
 					const commands = await bot.api.getMyCommands();
 
 					expect(commands).toHaveLength(2);
-					expect(commands[0].command).toBe("test_start");
+					expect(commands[0]?.command).toBe("test_start");
 				});
 
 				test("should handle webhook info", async () => {

@@ -178,8 +178,8 @@ function getSpecialDay(): RoastFn[] | null {
 	const date = now.getDate();
 	const day = now.getDay();
 
-	if (month === 3 && date === 1) return THEMED_ROASTS["aprilFools"];
-	if (day === 5 && date === 13) return THEMED_ROASTS["friday13th"];
+	if (month === 3 && date === 1) return THEMED_ROASTS["aprilFools"] ?? null;
+	if (day === 5 && date === 13) return THEMED_ROASTS["friday13th"] ?? null;
 	return null;
 }
 
@@ -197,7 +197,8 @@ function pickRoast(
 	});
 	const pool = applicable.length > 0 ? applicable : candidates;
 	const fn = pool[Math.floor(Math.random() * pool.length)];
-	return fn(pattern, flags) || pool[0](pattern, flags);
+	const fallback = pool[0];
+	return fn?.(pattern, flags) || fallback?.(pattern, flags) || "";
 }
 
 function maybeRoast(pattern: string, flags: string): string | null {
@@ -282,8 +283,8 @@ export class SedHandler {
 			const match = commandString.match(SED_PATTERN);
 			if (!match) continue;
 
-			const fr = match[1].replace(/\\\//g, "/");
-			const processedTo = match[2]
+			const fr = (match[1] ?? "").replace(/\\\//g, "/");
+			const processedTo = (match[2] ?? "")
 				.replace(/\\\//g, "/")
 				.replace(/\\(\d+)/g, "$$$1")
 				.replace(/\\n/g, "\n")
@@ -453,7 +454,7 @@ export class SedHandler {
 					const match = commandString.match(SED_PATTERN);
 					if (!match) continue;
 
-					const pattern = match[1].replace(/\\\//g, "/");
+					const pattern = (match[1] ?? "").replace(/\\\//g, "/");
 					const tip = getBestTip(pattern, userId, match[2]);
 
 					if (tip) {

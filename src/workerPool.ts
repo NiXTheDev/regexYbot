@@ -428,6 +428,7 @@ export class WorkerPool {
 			);
 			for (let i = 0; i < workersToTerminate && i < idleWorkers.length; i++) {
 				const worker = idleWorkers[i];
+				if (!worker) continue;
 				const state = this.workers.get(worker);
 
 				if (state) {

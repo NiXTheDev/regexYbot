@@ -45,8 +45,8 @@ describe("DatabaseService", () => {
 
 			const messages = await dbService.findMessagesInHistory(12345);
 			expect(messages.length).toBe(1);
-			expect(messages[0].message_id).toBe(100);
-			expect(messages[0].text).toBe("Hello world");
+			expect(messages[0]?.message_id).toBe(100);
+			expect(messages[0]?.text).toBe("Hello world");
 		});
 
 		test("should handle undefined text", async () => {

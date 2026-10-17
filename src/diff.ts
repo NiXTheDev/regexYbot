@@ -26,21 +26,19 @@ function processDiff(
 	originalText: string,
 	sedCommand: string,
 ): { replacement: string; uniqueMatches: string[] } | null {
-	const commandStrings = parseSedCommands(sedCommand);
-
-	if (commandStrings.length === 0) {
+	const commandString = parseSedCommands(sedCommand)[0];
+	if (!commandString) {
 		return null;
 	}
 
-	const commandString = commandStrings[0];
 	const match = commandString.match(SED_PATTERN);
 
 	if (!match) {
 		return null;
 	}
 
-	const rawPattern = match[1];
-	const rawReplacement = match[2];
+	const rawPattern = match[1] ?? "";
+	const rawReplacement = match[2] ?? "";
 	const flagsMatch = match[3];
 
 	const pattern = rawPattern.replace(/\\\//g, "/");

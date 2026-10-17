@@ -319,13 +319,13 @@ describe("SedHandler dangerous pattern warning", () => {
 			false,
 		);
 		expect(replyCalls).toHaveLength(1);
-		expect(replyCalls[0].options?.["receiver_user_id"]).toBe(456);
+		expect(replyCalls[0]?.options?.["receiver_user_id"]).toBe(456);
 		expect(runTracker.count).toBe(1);
 		expect(sendOrEditReplyCalls).toHaveLength(1);
-		expect(sendOrEditReplyCalls[0].messageText).toBe("substituted text");
+		expect(sendOrEditReplyCalls[0]?.messageText).toBe("substituted text");
 		// Regression: the sed command must be threaded through to the reply
 		// mapping so `/diff` can reconstruct it later.
-		expect(sendOrEditReplyCalls[0].sedCommand).toBe(dangerousCommand);
+		expect(sendOrEditReplyCalls[0]?.sedCommand).toBe(dangerousCommand);
 	});
 
 	test("omits receiver_user_id in private chat warning", async () => {
@@ -338,7 +338,7 @@ describe("SedHandler dangerous pattern warning", () => {
 			false,
 		);
 		expect(replyCalls).toHaveLength(1);
-		expect(replyCalls[0].options?.["receiver_user_id"]).toBeUndefined();
+		expect(replyCalls[0]?.options?.["receiver_user_id"]).toBeUndefined();
 	});
 
 	test("continues substitution when warning reply fails", async () => {
@@ -358,6 +358,6 @@ describe("SedHandler dangerous pattern warning", () => {
 		expect(replyCalls).toHaveLength(1);
 		expect(runTracker.count).toBe(1);
 		expect(sendOrEditReplyCalls).toHaveLength(1);
-		expect(sendOrEditReplyCalls[0].messageText).toBe("substituted text");
+		expect(sendOrEditReplyCalls[0]?.messageText).toBe("substituted text");
 	});
 });
