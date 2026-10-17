@@ -34,7 +34,9 @@ import {
 	getLanguageInfo,
 	formatLanguageList,
 	isSupportedLanguage,
+	type SessionData,
 } from "./i18n";
+import { session } from "./session";
 import { explainPattern } from "./explain";
 import { getMetrics, formatHealthStatus, formatMetrics } from "./metrics";
 import { VERSION, COMMIT, RELEASED_AT, CHANGES } from "./version";
@@ -75,6 +77,11 @@ bot.api.transform(
 );
 
 bot.use(commands());
+
+// --- Session Setup ---
+// grammY v2 has no session plugin, so this in-memory stand-in keeps i18n's
+// language choice across updates.
+bot.use(session<SessionData>(() => ({})));
 
 // --- i18n Setup ---
 bot.use(i18n);
@@ -484,7 +491,7 @@ myCommands.command("privacy", "Show privacy information", async (ctx) => {
 			const locale = await ctx.i18n.getLocale();
 			const target = userLang.toLowerCase();
 			if (locale !== target) {
-				ctx.i18n.useLocale(target);
+				await ctx.i18n.setLocale(target);
 			}
 		} catch {
 			// Fall back to current locale if switching fails
@@ -555,7 +562,7 @@ myCommands.command("language", "Change bot language", async (ctx) => {
 			return;
 		}
 
-		ctx.i18n.useLocale(langCode);
+		await ctx.i18n.setLocale(langCode);
 		const langInfo = getLanguageInfo(langCode);
 		await ctx.sendMessage(
 			ctx.t("command-language-setSuccess", {
