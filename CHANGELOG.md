@@ -3,6 +3,56 @@
 All notable changes to this project will be documented in this file.
 
 <details open>
+<summary><b>[0.3.0-rc1] - 2026-10-17</b></summary>
+
+> **Preview release.** The bot now runs on grammY v2 (`2.0.0-beta.6`) while the
+> `@grammyjs/*` plugins are still on v1, so parts of this build are knowingly
+> broken. Please read **Known Issues** before deploying.
+
+### Breaking Changes
+
+- Migrated to grammY v2 (`npm:@jsr/grammyjs__grammy@2.0.0-beta.6`). Middleware,
+  handler registration and `Context` typings were updated for the v2 API.
+
+### Bug Fixes
+
+- `/diff` works again: the sed command is now stored with the bot reply
+  (`bot_replies.sed_command`) and read back, so the applied command can be
+  reconstructed instead of being lost after the reply was sent.
+- Restored `/language` persistence — the locale selected via `/language set`
+  (and by `/privacy`) now outlives the update that set it. grammY v2 no longer
+  provides the session middleware that v1 bundled, so a small in-memory session
+  middleware (`src/session.ts`) was added, keyed per chat to match the previous
+  default. Note: it is in-memory only, so language choices reset on restart.
+- `DatabaseService` tests are now order-independent.
+
+### Maintenance
+
+- Enabled the TypeScript strict flags that had been placed outside
+  `compilerOptions` and were therefore inert, then enabled
+  `noUncheckedIndexedAccess` and fixed the fallout (48 sites).
+- Live Telegram API tests are now opt-in behind `LIVE_API_TESTS`, so the
+  pre-commit gate no longer needs a real bot token.
+- Applied Prettier formatting to files that had been committed without the gate.
+- CI: prerelease builds are tagged `preview` and keep the roaming `latest`/`dev`
+  tags; `release` is never written by a prerelease build.
+
+### Known Issues (preview)
+
+- `@grammyjs/runner`'s `run()` requires a documented cast against the v2 typings
+  (grammyjs/runner#28).
+- `exactOptionalPropertyTypes` stays disabled: `@grammyjs/hydrate` v1 widens
+  `Update.inline_query` to `InlineQueryX | undefined`, which stops `MyContext`
+  from satisfying `Context`. Re-enable once a v2 plugin release exists.
+- `@grammyjs/i18n`, `@grammyjs/hydrate`, `@grammyjs/commands` and
+  `@grammyjs/auto-retry` remain on v1 against grammY v2. i18n v2 exists only as
+  an unpublished Deno/JSR package and cannot be installed.
+- `bun test` can occasionally exit non-zero from a workerpool flake; CI runs it
+  with `--retry=5`.
+
+</details>
+
+<details open>
 <summary><b>[0.2.2.2] - 2026-08-11</b></summary>
 
 ### Bug Fixes
