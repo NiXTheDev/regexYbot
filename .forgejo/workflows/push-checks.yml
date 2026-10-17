@@ -8,7 +8,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    container: oven/bun:1.3.14
+    container: oven/bun:1.4.3
     steps:
       - name: Checkout code
         uses: https://hangar.nixthedev.ru/actions/checkout@v4
@@ -22,7 +22,7 @@ jobs:
   format:
     name: Format Check
     runs-on: ubuntu-latest
-    container: oven/bun:1.3.14
+    container: oven/bun:1.4.3
     steps:
       - name: Checkout code
         uses: https://hangar.nixthedev.ru/actions/checkout@v4
@@ -36,7 +36,7 @@ jobs:
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
-    container: oven/bun:1.3.14
+    container: oven/bun:1.4.3
     steps:
       - name: Checkout code
         uses: https://hangar.nixthedev.ru/actions/checkout@v4
@@ -50,7 +50,7 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
-    container: oven/bun:1.3.14
+    container: oven/bun:1.4.3
     needs: [lint, format, typecheck]
     steps:
       - name: Checkout code
