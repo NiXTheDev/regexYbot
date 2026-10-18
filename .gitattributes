@@ -1,0 +1,5 @@
+# Normalize line endings in the repository and check them out as LF on
+# every platform. Without this, core.autocrlf=true on Windows checks out
+# CRLF for every text file and `prettier --check` (endOfLine: "lf")
+# fails on a fresh clone.
+* text=auto eol=lf
