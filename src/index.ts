@@ -86,6 +86,20 @@ bot.use(session<SessionData>(() => ({})));
 // --- i18n Setup ---
 bot.use(i18n);
 
+// --- Opportunistic Cleanup ---
+// Registered before any terminal handler (commands, callbacks, message):
+// those never call next(), so a cleanup middleware registered after them
+// would only ever see update types nothing consumes. Runs after each
+// update has been processed; failures must not break the chain.
+bot.use(async (_, next) => {
+	await next();
+	try {
+		await dbService.cleanupOldEntries();
+	} catch (error) {
+		logger.error(`Opportunistic cleanup failed: ${error}`);
+	}
+});
+
 // --- Rate Limiting ---
 if (RATE_LIMIT_ENABLED) {
 	logger.info(
@@ -895,10 +909,6 @@ myCommands
 	.setCommands(bot)
 	.then(() => logger.info("Commands set with Telegram."))
 	.catch((err) => logger.error(err, "Failed to set commands"));
-bot.use(async (_, next) => {
-	await next();
-	await dbService.cleanupOldEntries();
-});
 // grammY v2 changed the `Api.getUpdates` signature (AbortSignal handling),
 // which the published `@grammyjs/runner` v1 types do not model yet. Runtime
 // behaviour is unchanged. Upstream tracking: grammyjs/runner#28.
