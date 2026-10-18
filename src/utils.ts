@@ -1,6 +1,10 @@
 // utils.ts
 import { LRUCache } from "./lruCache";
 import { CONFIG } from "./config";
+// Import cycle with ./metrics is intentional and safe: metrics reads this
+// module's cache stats, this module records compilations into metrics, and
+// both only touch each other inside function bodies (never at module load).
+import { recordRegexCompilation } from "./metrics";
 
 // Regex for sed command, reverting to the original non-greedy version.
 export const SED_PATTERN =
@@ -29,6 +33,7 @@ export function getCachedRegex(pattern: string, flags: string): RegExp {
 	if (!regex) {
 		regex = new RegExp(pattern, flags);
 		regexCache.set(key, regex);
+		recordRegexCompilation();
 	}
 
 	return regex;

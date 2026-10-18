@@ -2,6 +2,7 @@ declare let self: Worker;
 import { Logger } from "./logger";
 import { performance } from "perf_hooks";
 import { TaskMessage, ResultMessage } from "./types"; // Import from types.ts
+import { getCachedRegex } from "./utils";
 
 function processTask(task: TaskMessage, logger: Logger): ResultMessage {
 	logger.debug(
@@ -18,7 +19,11 @@ function processTask(task: TaskMessage, logger: Logger): ResultMessage {
 			throw new Error("No command supplied to worker");
 		}
 		logger.debug(`Applying: /${cmd.pattern}/${cmd.flags}/${cmd.replacement}/`);
-		const regex = new RegExp(cmd.pattern, cmd.flags);
+		// Compiled patterns are cached per worker thread. Reset `lastIndex`
+		// because cached instances are shared across tasks and /g or /y
+		// patterns would otherwise resume matching mid-string.
+		const regex = getCachedRegex(cmd.pattern, cmd.flags);
+		regex.lastIndex = 0;
 		currentText = currentText.replace(regex, cmd.replacement);
 
 		let performanceMs: number | null = null;
