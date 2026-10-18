@@ -218,7 +218,7 @@ if (RATE_LIMIT_ENABLED) {
 		if (userData.count + cost > RATE_LIMIT_COMMANDS_PER_MINUTE) {
 			const remaining = Math.ceil((userData.resetTime - now) / 1000);
 			logger.debug(`User ${userId} rate limited. Retry after ${remaining}s`);
-			await ctx.sendMessage(ctx.t("errors.rateLimit", { seconds: remaining }));
+			await ctx.sendMessage(ctx.t("error-rateLimit", { seconds: remaining }));
 			return; // Don't process the command
 		}
 

@@ -76,16 +76,16 @@ about = About { -brand-name }
 
 ## Translation Keys
 
-All translation keys follow a consistent naming pattern:
+All translation keys follow a consistent naming pattern (flat, hyphenated
+IDs — Fluent message identifiers cannot contain `.`):
 
-- `errors.*` - Error messages
-- `commands.*` - Command responses (/start, /privacy, etc.)
-- `substitution.*` - Substitution results
-- `tips.*` - Optimization tips
-- `regexHelp.*` - Regex help system
-- `health.*` - Health check output
-- `metrics.*` - Performance metrics
-- `general.*` - General UI strings
+- `error-*` - Error messages
+- `command-*` - Command responses (/start, /privacy, etc.)
+- `substitution-*` - Substitution results
+- `tip-*` - Optimization tips
+- `regexHelp-*` - Regex help system
+- `health-*` / `metrics-*` - Health check and metrics output
+- `general-*` - General UI strings
 
 ## Quality Guidelines
 
