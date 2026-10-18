@@ -212,13 +212,14 @@ describe("WorkerPool", () => {
 				includePerformance: false,
 			};
 
-			// Queue many tasks rapidly (15 tasks with large text)
+			// Queue many tasks rapidly (15 tasks with large text).
+			// run() enqueues synchronously, so no sleep is needed here: right
+			// after this loop every task sits in either the queue or a
+			// worker's pending slot. Any delay races against fast workers
+			// draining the queue and empties it before the assertion below.
 			const promises = Array(15)
 				.fill(null)
 				.map(() => drainPool.run(task));
-
-			// Very small delay - just enough for tasks to enter queue
-			await new Promise((resolve) => setTimeout(resolve, 10));
 
 			// Get stats before shutdown - should be at maxWorkers (2)
 			const statsBefore = drainPool.getStats();
