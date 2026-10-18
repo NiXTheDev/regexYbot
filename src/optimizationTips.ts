@@ -241,8 +241,14 @@ export function hasSignificantImprovement(pattern: string): boolean {
 }
 
 /**
+ * How long an ephemeral tip stays visible before it deletes itself
+ */
+export const TIP_LIFETIME_MS = 10_000;
+
+/**
  * Send an ephemeral optimization tip
- * Uses receiver_user_id for privacy — only the sender sees it
+ * Uses receiver_user_id for privacy — only the sender sees it — and
+ * deletes the message after `lifetimeMs` to avoid clutter
  */
 export async function sendTransientTip(
 	ctx: {
@@ -252,11 +258,13 @@ export async function sendTransientTip(
 				text: string,
 				options?: { receiver_user_id?: number },
 			) => Promise<{ message_id: number }>;
+			deleteMessage: (chatId: number, messageId: number) => Promise<unknown>;
 		};
 		chat?: { id: number; type?: string };
 		from?: { id: number };
 	},
 	tip: OptimizationTip,
+	lifetimeMs: number = TIP_LIFETIME_MS,
 ): Promise<void> {
 	const formattedTip = formatTip(tip);
 
@@ -265,9 +273,19 @@ export async function sendTransientTip(
 			const isGroupLike =
 				ctx.chat?.type === "group" || ctx.chat?.type === "supergroup";
 
-			await ctx.api.sendMessage(ctx.chat.id, formattedTip, {
+			const sent = await ctx.api.sendMessage(ctx.chat.id, formattedTip, {
 				...(isGroupLike && { receiver_user_id: ctx.from.id }),
 			});
+
+			// Make the tip ephemeral as advertised in the module docs. Deletion
+			// can legitimately fail (manually deleted already, rate limited);
+			// that must never surface as an error to anyone.
+			const chatId = ctx.chat.id;
+			setTimeout(() => {
+				ctx.api.deleteMessage(chatId, sent.message_id).catch((error) => {
+					_logger.debug(`Ephemeral tip cleanup failed: ${error}`);
+				});
+			}, lifetimeMs);
 		}
 	} catch (error) {
 		_logger.error(`Failed to send tip: ${error}`);

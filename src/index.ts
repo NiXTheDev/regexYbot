@@ -495,6 +495,38 @@ async function handleTextMessage(
 	}
 }
 
+// Ephemeral lifetime for command replies advertised as self-deleting
+// (see CHANGELOG): /regexhelp and /explain clean up after themselves.
+const EPHEMERAL_REPLY_LIFETIME_MS = 10_000;
+
+type SendMessageOptions = NonNullable<Parameters<MyContext["sendMessage"]>[1]>;
+
+/**
+ * Send a reply that restricts visibility to the invoking user in groups
+ * and deletes itself after EPHEMERAL_REPLY_LIFETIME_MS.
+ */
+async function sendEphemeralReply(
+	ctx: MyContext,
+	text: string,
+	options?: SendMessageOptions,
+): Promise<void> {
+	const isGroupChat =
+		ctx.chat?.type === "group" || ctx.chat?.type === "supergroup";
+	const sent = await ctx.sendMessage(text, {
+		...(isGroupChat && ctx.from ? { receiver_user_id: ctx.from.id } : {}),
+		...(options ?? {}),
+	});
+	const chatId = ctx.chat?.id;
+	if (chatId === undefined) return;
+	setTimeout(() => {
+		ctx.api
+			.deleteMessage(chatId, sent.message_id)
+			.catch((error) =>
+				logger.debug(`Ephemeral reply cleanup failed: ${error}`),
+			);
+	}, EPHEMERAL_REPLY_LIFETIME_MS);
+}
+
 // --- Command Group ---
 const myCommands = new CommandGroup<MyContext>();
 myCommands.command("privacy", "Show privacy information", async (ctx) => {
@@ -518,7 +550,7 @@ myCommands.command("start", "Get a greeting message", async (ctx) => {
 });
 
 myCommands.command("regexhelp", "Get help with regex syntax", async (ctx) => {
-	await ctx.sendMessage(getMainHelpMessage(), {
+	await sendEphemeralReply(ctx, getMainHelpMessage(), {
 		parse_mode: "MarkdownV2",
 		reply_markup: createCategoryKeyboard(),
 	});
@@ -527,7 +559,7 @@ myCommands.command("regexhelp", "Get help with regex syntax", async (ctx) => {
 myCommands.command("explain", "Explain a regex pattern", async (ctx) => {
 	const pattern = String(ctx.match ?? "").trim();
 	const explanation = explainPattern(pattern);
-	await ctx.sendMessage(explanation, { parse_mode: "MarkdownV2" });
+	await sendEphemeralReply(ctx, explanation, { parse_mode: "MarkdownV2" });
 });
 
 myCommands.command("language", "Change bot language", async (ctx) => {

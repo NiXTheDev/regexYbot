@@ -110,6 +110,7 @@ describe("sendTransientTip", () => {
 
 	function createMockCtx(chatType: string) {
 		let capturedOptions: { receiver_user_id?: number } | undefined;
+		const deleted: number[] = [];
 		const sendMessage = async (
 			_chatId: number,
 			_text: string,
@@ -118,13 +119,17 @@ describe("sendTransientTip", () => {
 			capturedOptions = options;
 			return { message_id: 1 };
 		};
+		const deleteMessage = async (_chatId: number, messageId: number) => {
+			deleted.push(messageId);
+		};
 		return {
 			ctx: {
-				api: { sendMessage },
+				api: { sendMessage, deleteMessage },
 				chat: { id: 123, type: chatType },
 				from: { id: 456 },
 			},
 			getOptions: () => capturedOptions,
+			getDeleted: () => deleted,
 		};
 	}
 
@@ -145,5 +150,20 @@ describe("sendTransientTip", () => {
 		await sendTransientTip(ctx, tip);
 		expect(getOptions()).toBeDefined();
 		expect("receiver_user_id" in (getOptions() ?? {})).toBe(false);
+	});
+
+	test("deletes the tip once the lifetime elapses", async () => {
+		const { ctx, getDeleted } = createMockCtx("group");
+		await sendTransientTip(ctx, tip, 5);
+		expect(getDeleted()).toEqual([]);
+		await new Promise((resolve) => setTimeout(resolve, 25));
+		expect(getDeleted()).toEqual([1]);
+	});
+
+	test("keeps the tip while the lifetime has not elapsed", async () => {
+		const { ctx, getDeleted } = createMockCtx("private");
+		await sendTransientTip(ctx, tip, 100);
+		await new Promise((resolve) => setTimeout(resolve, 15));
+		expect(getDeleted()).toEqual([]);
 	});
 });
