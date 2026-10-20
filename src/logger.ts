@@ -41,6 +41,40 @@ export function getCorrelationId(): string | undefined {
 	return correlationStorage.getStore();
 }
 
+/**
+ * Pad a number to two digits for timestamp components
+ */
+function pad(value: number): string {
+	return String(value).padStart(2, "0");
+}
+
+/**
+ * Format the value of a {timestamp} placeholder in the log template.
+ *
+ * Supported forms (documented in .env.example):
+ * - `datetime` (also used for the bare `{timestamp}` token) — local
+ *   time as DD/MM/YYYY HH:mm:ss
+ * - `unix` — Unix seconds with millisecond precision (e.g. 1707312345.123)
+ * - `ISO` — ISO 8601 (e.g. 2024-02-07T12:39:05.123Z)
+ *
+ * Unknown formats are returned unchanged so misconfigurations are visible
+ * in the output instead of silently disappearing.
+ */
+export function formatLogTimestamp(format: string): string {
+	const now = new Date();
+	switch (format) {
+		case "unix":
+			return (now.getTime() / 1000).toFixed(3);
+		case "ISO":
+			return now.toISOString();
+		case "datetime":
+		case "":
+			return `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+		default:
+			return `{timestamp(${format})}`;
+	}
+}
+
 export class Logger {
 	private moduleName: string;
 	constructor(moduleName: string) {
@@ -59,7 +93,13 @@ export class Logger {
 
 		const cid = getCorrelationId();
 
+		// Timestamps are replaced before {message} so placeholder text inside
+		// log messages is never rewritten.
 		const formattedMessage = logTemplate
+			.replace(/\{timestamp\(([^)]*)\)\}/g, (_, format: string) =>
+				formatLogTimestamp(format),
+			)
+			.replace(/\{timestamp\}/g, formatLogTimestamp("datetime"))
 			.replace("{level}", level.toUpperCase())
 			.replace("{module}", this.moduleName)
 			.replace("{message}", message)

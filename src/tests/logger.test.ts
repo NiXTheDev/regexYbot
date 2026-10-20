@@ -1,5 +1,10 @@
 import { describe, test, expect } from "bun:test";
-import { Logger, withCorrelation, getCorrelationId } from "../logger";
+import {
+	Logger,
+	withCorrelation,
+	getCorrelationId,
+	formatLogTimestamp,
+} from "../logger";
 
 describe("Logger Correlation IDs", () => {
 	describe("withCorrelation", () => {
@@ -129,5 +134,46 @@ describe("Logger Correlation IDs", () => {
 
 			expect(ids.size).toBe(100);
 		});
+	});
+});
+
+describe("formatLogTimestamp", () => {
+	test("datetime format is DD/MM/YYYY HH:mm:ss in local time", () => {
+		const formatted = formatLogTimestamp("datetime");
+		const now = new Date();
+
+		expect(formatted).toMatch(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/);
+		// Same instant: year/date components must match the wall clock.
+		const match = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(formatted);
+		expect(match?.[1]).toBe(String(now.getDate()).padStart(2, "0"));
+		expect(match?.[2]).toBe(String(now.getMonth() + 1).padStart(2, "0"));
+		expect(match?.[3]).toBe(String(now.getFullYear()));
+	});
+
+	test("empty format behaves like datetime", () => {
+		expect(formatLogTimestamp("")).toMatch(
+			/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/,
+		);
+	});
+
+	test("ISO format produces a canonical ISO 8601 string", () => {
+		const formatted = formatLogTimestamp("ISO");
+		// toISOString() output round-trips through Date exactly.
+		expect(new Date(formatted).toISOString()).toBe(formatted);
+	});
+
+	test("unix format is seconds with millisecond precision", () => {
+		const before = Date.now();
+		const formatted = formatLogTimestamp("unix");
+		const after = Date.now();
+		const value = Number(formatted);
+
+		expect(formatted).toMatch(/^\d+\.\d{3}$/);
+		expect(value * 1000).toBeGreaterThanOrEqual(before - 1);
+		expect(value * 1000).toBeLessThanOrEqual(after + 1);
+	});
+
+	test("unknown formats are left untouched", () => {
+		expect(formatLogTimestamp("bogus")).toBe("{timestamp(bogus)}");
 	});
 });
