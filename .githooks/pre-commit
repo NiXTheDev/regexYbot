@@ -32,9 +32,13 @@ fi
 git diff-index --check --cached $against -- || exit 1
 
 # ---- Checks ----
-bunx prettier --check .
-bun --bun tsc --noEmit
-bunx eslint
+# The same three scripts as `bun run ltf:check`, followed by the plain
+# (no --retry) test run so a real failure still blocks the commit
+# instead of being retried away.
+bun run fmt:check
+bun run typecheck
+bun run lint
 bun test
 
-echo "All checks passed!\nWriting commit object..."
+echo "All checks passed!"
+echo "Writing commit object..."
