@@ -17,10 +17,15 @@ import { Logger, withCorrelation } from "./logger";
 import { SED_PATTERN } from "./utils";
 import { DatabaseService } from "./database";
 import { WorkerPool } from "./workerPool";
+import { CircuitBreaker } from "./circuitBreaker";
 import { parseSedCommands, SedHandler } from "./sed";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TelegramAPIError } from "./errors";
+import {
+	TelegramAPIError,
+	RateLimitError,
+	isCircuitBreakerError,
+} from "./errors";
 import {
 	createCategoryKeyboard,
 	createItemKeyboard,
@@ -230,9 +235,16 @@ if (RATE_LIMIT_ENABLED) {
 
 		// Check if this would exceed limit
 		if (userData.count + cost > RATE_LIMIT_COMMANDS_PER_MINUTE) {
-			const remaining = Math.ceil((userData.resetTime - now) / 1000);
-			logger.debug(`User ${userId} rate limited. Retry after ${remaining}s`);
-			await ctx.sendMessage(ctx.t("error-rateLimit", { seconds: remaining }));
+			const remainingMs = userData.resetTime - now;
+			const rateLimitError = new RateLimitError(userId, remainingMs);
+			logger.debug(
+				`${rateLimitError.message} (${RATE_LIMIT_COMMANDS_PER_MINUTE} per minute)`,
+			);
+			await ctx.sendMessage(
+				ctx.t("error-rateLimit", {
+					seconds: Math.ceil(remainingMs / 1000),
+				}),
+			);
 			return; // Don't process the command
 		}
 
@@ -325,6 +337,11 @@ const workerPool = new WorkerPool({
 logger.info("Using WorkerPool with dynamic scaling");
 
 // --- Sed Handler Setup ---
+// Guards the Telegram send path: repeated API failures (outages, 5xx) trip
+// the breaker so the bot stops hammering a failing endpoint and queued
+// replies fail fast with a user-visible message instead of timing out.
+const telegramCircuitBreaker = new CircuitBreaker("telegram-send");
+
 async function sendOrEditReply(
 	ctx: MyContext,
 	targetMsgId: number,
@@ -342,16 +359,22 @@ async function sendOrEditReply(
 			);
 			if (previousBotReplyId) {
 				try {
-					await ctx.api.editMessageText(
-						ctx.chat!.id,
-						previousBotReplyId,
-						messageText,
-						{
-							parse_mode: "MarkdownV2",
-							...(linkPreviewDisabled !== undefined
-								? { link_preview_options: { is_disabled: linkPreviewDisabled } }
-								: {}),
-						},
+					await telegramCircuitBreaker.execute(() =>
+						ctx.api.editMessageText(
+							ctx.chat!.id,
+							previousBotReplyId,
+							messageText,
+							{
+								parse_mode: "MarkdownV2",
+								...(linkPreviewDisabled !== undefined
+									? {
+											link_preview_options: {
+												is_disabled: linkPreviewDisabled,
+											},
+										}
+									: {}),
+							},
+						),
 					);
 					await dbService.storeBotReplyMapping(
 						targetMsgId,
@@ -378,13 +401,15 @@ async function sendOrEditReply(
 				}
 			}
 		}
-		const sentMsg = await ctx.api.sendMessage(ctx.chat!.id, messageText, {
-			reply_parameters: { message_id: targetMsgId },
-			parse_mode: "MarkdownV2",
-			...(linkPreviewDisabled !== undefined
-				? { link_preview_options: { is_disabled: linkPreviewDisabled } }
-				: {}),
-		});
+		const sentMsg = await telegramCircuitBreaker.execute(() =>
+			ctx.api.sendMessage(ctx.chat!.id, messageText, {
+				reply_parameters: { message_id: targetMsgId },
+				parse_mode: "MarkdownV2",
+				...(linkPreviewDisabled !== undefined
+					? { link_preview_options: { is_disabled: linkPreviewDisabled } }
+					: {}),
+			}),
+		);
 		await dbService.storeBotReplyMapping(
 			targetMsgId,
 			ctx.chat!.id,
@@ -398,6 +423,11 @@ async function sendOrEditReply(
 		);
 		logger.debug("Successfully sent new reply.");
 	} catch (error) {
+		if (isCircuitBreakerError(error)) {
+			logger.warn("Circuit open for telegram-send, skipping reply to message");
+			throw error;
+		}
+
 		// Convert to TelegramAPIError for consistent handling
 		const telegramError =
 			error instanceof BotApiError

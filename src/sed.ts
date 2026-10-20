@@ -3,7 +3,13 @@ import type { SedCommand, TaskMessage } from "./types";
 import type { WorkerPool } from "./workerPool";
 import { SED_PATTERN, getRegexFlags, escapeMarkdownV2 } from "./utils";
 import { CONFIG } from "./config";
-import { RegexError, WorkerError } from "./errors";
+import {
+	BotError,
+	RegexError,
+	WorkerError,
+	isWorkerError,
+	isCircuitBreakerError,
+} from "./errors";
 import type { MyContext } from "./i18n";
 import { recordSubstitution } from "./metrics";
 import {
@@ -13,7 +19,7 @@ import {
 } from "./dangerousPatterns";
 import { getBestTip, sendTransientTip } from "./optimizationTips";
 
-const { MAX_CHAIN_LENGTH, MAX_MESSAGE_LENGTH, WORKER_TIMEOUT_MS } = CONFIG;
+const { MAX_CHAIN_LENGTH, MAX_MESSAGE_LENGTH } = CONFIG;
 
 /**
  * Track performance message info for edit handling
@@ -360,24 +366,23 @@ export class SedHandler {
 			} catch (error: unknown) {
 				this.logger.error(String(error), "Worker pool task failed");
 
-				// Convert to custom error types for consistent handling
-				let botError: WorkerError | RegexError;
-				if (error instanceof Error && error.message.includes("timed out")) {
-					botError = new WorkerError(
-						`Regex operation timed out after ${WORKER_TIMEOUT_MS / 1000}s`,
-						"regex_execution",
-						undefined,
-						{ timeout: WORKER_TIMEOUT_MS },
-					);
-				} else if (
-					error instanceof Error &&
+				// The pool already rejects with typed errors (timeouts, worker
+				// crashes, shutdown); only failures that arrive untyped need
+				// conversion here.
+				let botError: BotError;
+				if (
+					isWorkerError(error) &&
 					error.message.includes("Invalid regular expression")
 				) {
+					// Engine SyntaxErrors surface as plain WorkerErrors from the
+					// pool; convert for the pattern-specific user guidance.
 					botError = new RegexError(
 						commandForWorker.pattern,
 						commandForWorker.flags,
-						error instanceof Error ? error : undefined,
+						error,
 					);
+				} else if (error instanceof BotError) {
+					botError = error;
 				} else {
 					botError = new WorkerError(
 						error instanceof Error ? error.message : String(error),
@@ -424,14 +429,27 @@ export class SedHandler {
 		// `join("\n")` round-trips through `parseSedCommands`: a command only
 		// starts on a line beginning with `s/`, and continuation lines can never
 		// begin with `s/` (they would have started a new command instead).
-		await this.deps.sendOrEditReply(
-			ctx,
-			targetMsgId,
-			escapeMarkdownV2(resultText),
-			sedCommands.join("\n"),
-			isEdit,
-			linkPreviewDisabled,
-		);
+		try {
+			await this.deps.sendOrEditReply(
+				ctx,
+				targetMsgId,
+				escapeMarkdownV2(resultText),
+				sedCommands.join("\n"),
+				isEdit,
+				linkPreviewDisabled,
+			);
+		} catch (error: unknown) {
+			if (!isCircuitBreakerError(error)) {
+				throw error;
+			}
+			// The Telegram send path is circuit-broken after repeated API
+			// failures; tell the user instead of piling on more requests.
+			this.logger.warn(
+				`Telegram send circuit open, dropping sed reply to message ${targetMsgId}`,
+			);
+			await ctx.sendMessage(ctx.t("error-circuitOpen"));
+			return;
+		}
 
 		const roast = maybeRoast(lastPattern, lastFlags);
 		if (roast && ctx.chat) {

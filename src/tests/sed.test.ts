@@ -2,6 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { parseSedCommands, SedHandler } from "../sed";
 import type { MyContext } from "../i18n";
 import type { WorkerPool } from "../workerPool";
+import { CircuitBreakerError } from "../errors";
 
 describe("parseSedCommands", () => {
 	describe("basic command parsing", () => {
@@ -430,5 +431,67 @@ describe("SedHandler performance message tracking", () => {
 		await handler.handleSedCommand(ctx, ["s/c/d/"], "ccc", 42, true);
 		await flushMicrotasks();
 		expect(deleted).toEqual([]);
+	});
+});
+
+describe("SedHandler circuit breaker handling", () => {
+	test("sends the localized circuitOpen message when the reply path is circuit-broken", async () => {
+		const sentTexts: string[] = [];
+		const ctx = {
+			chat: { id: 123, type: "group" },
+			from: { id: 456 },
+			sendMessage: async (text: string) => {
+				sentTexts.push(text);
+				return { message_id: 1 };
+			},
+			t: (key: string) =>
+				key === "error-circuitOpen" ? "TRANSLATED-CIRCUIT" : key,
+			api: {
+				sendMessage: async () => ({ message_id: 9 }),
+				deleteMessage: async () => {},
+			},
+		} as unknown as MyContext;
+
+		const workerPool = {
+			run: async () => ({ result: "substituted text", performanceMs: null }),
+		} as unknown as WorkerPool;
+		const handler = new SedHandler({
+			workerPool,
+			sendOrEditReply: async () => {
+				throw new CircuitBreakerError("telegram-send", Date.now() + 1_000);
+			},
+		});
+
+		await handler.handleSedCommand(ctx, ["s/a/b/"], "aaa", 42, false);
+
+		// The user sees the localized unavailable message, not a silent
+		// failure, and nothing else was sent afterwards.
+		expect(sentTexts).toEqual(["TRANSLATED-CIRCUIT"]);
+	});
+
+	test("other reply errors still propagate", async () => {
+		const ctx = {
+			chat: { id: 123, type: "group" },
+			from: { id: 456 },
+			sendMessage: async () => ({ message_id: 1 }),
+			api: {
+				sendMessage: async () => ({ message_id: 9 }),
+				deleteMessage: async () => {},
+			},
+		} as unknown as MyContext;
+
+		const workerPool = {
+			run: async () => ({ result: "substituted text", performanceMs: null }),
+		} as unknown as WorkerPool;
+		const handler = new SedHandler({
+			workerPool,
+			sendOrEditReply: async () => {
+				throw new Error("unexpected reply failure");
+			},
+		});
+
+		await expect(
+			handler.handleSedCommand(ctx, ["s/a/b/"], "aaa", 42, false),
+		).rejects.toThrow("unexpected reply failure");
 	});
 });
