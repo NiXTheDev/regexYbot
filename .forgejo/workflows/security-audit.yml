@@ -20,7 +20,7 @@ jobs:
         run: |
           set +e
           apk add --no-cache jq curl
-          AUDIT_OUTPUT=$(BUN_INSTALL_SECURITY=@bun-security-scanner/osv bun install -d 2>&1)
+          AUDIT_OUTPUT=$(BUN_INSTALL_SECURITY=@bun-security-scanner/osv bun install -d --frozen-lockfile 2>&1)
           AUDIT_EXIT=$?
           echo "$AUDIT_OUTPUT" > audit_output.txt
           echo "AUDIT_EXIT=${AUDIT_EXIT}" >> $GITHUB_ENV

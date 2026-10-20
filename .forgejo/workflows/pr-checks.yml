@@ -74,16 +74,6 @@ jobs:
         run: |
           curl -fsSL "https://download.docker.com/linux/static/stable/$(uname -m)/docker-28.0.4.tgz" | tar xz -C /usr/local/bin --strip-components=1 docker/docker
 
-      - name: Install Bun
-        run: |
-          curl -fsSL https://bun.sh/install | bash
-          echo "$HOME/.bun/bin" >> $GITHUB_PATH
-
-      - name: Generate version
-        run: |
-          bun install -d --frozen-lockfile
-          bun run generate
-
       - name: Set up QEMU
         uses: https://hangar.nixthedev.ru/docker/setup-qemu-action@v3
 

@@ -15,7 +15,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN bun install --production && bun src/version.ts generate && chown -R bun:bun /app && rm -rf .git
+RUN bun install --production --frozen-lockfile && bun src/version.ts generate && chown -R bun:bun /app && rm -rf .git
 
 USER bun
 

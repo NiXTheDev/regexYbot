@@ -44,7 +44,7 @@ jobs:
           chmod +x /usr/local/bin/fj
           echo "BUN_INSTALL=$BUN_INSTALL" >> $GITHUB_ENV
           echo "$BUN_INSTALL/bin" >> $GITHUB_PATH
-          bun install --production
+          bun install --production --frozen-lockfile
 
       - name: Get version from inputs or package.json
         id: get_version
