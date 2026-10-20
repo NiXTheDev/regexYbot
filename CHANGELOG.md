@@ -14,6 +14,20 @@ All notable changes to this project will be documented in this file.
 - Migrated to grammY v2 (`npm:@jsr/grammyjs__grammy@2.0.0-beta.6`). Middleware,
   handler registration and `Context` typings were updated for the v2 API.
 
+### Features
+
+- `/privacy` gained a Delete-my-data button (private chats): after an inline
+  confirmation the bot deletes this chat's stored message history and
+  reply-mapping rows, localized across all 11 locales.
+- Localization coverage completed: user-facing chrome that was still
+  hard-English — `/health` and `/metrics` output, `/regexhelp` menus and
+  back labels, ephemeral optimization tips, the sed performance line, and
+  the non-retryable Telegram-API failure notice — now resolves through the
+  Fluent locales. A bound `Translator` type threads the locale through the
+  formatters that have no Telegram context; the error classes keep their
+  `getUserMessage()` API as a fallback. All 11 locales remain at 53-key
+  parity, enforced by a test.
+
 ### Bug Fixes
 
 - `/diff` works again: the sed command is now stored with the bot reply
@@ -25,6 +39,13 @@ All notable changes to this project will be documented in this file.
   middleware (`src/session.ts`) was added, keyed per chat to match the previous
   default. Note: it is in-memory only, so language choices reset on restart.
 - `DatabaseService` tests are now order-independent.
+- Shipped binaries no longer crash at boot: the Fluent locales were loaded
+  from a CWD-relative `src/locales` directory that `bun build --compile`
+  bundles cannot carry, so an executable started outside a repository
+  checkout threw ENOENT from the i18n constructor. All 11 `.ftl` files are
+  now imported as inline text and registered through the plugin's
+  `loadLocaleSync`, leaving no working-directory dependence in dev,
+  container or binary runs.
 
 ### Maintenance
 
@@ -36,6 +57,25 @@ All notable changes to this project will be documented in this file.
 - Applied Prettier formatting to files that had been committed without the gate.
 - CI: prerelease builds are tagged `preview` and keep the roaming `latest`/`dev`
   tags; `release` is never written by a prerelease build.
+- CI/lockfile: `--frozen-lockfile` is now enforced at every install site
+  (release workflow, Dockerfile, security audit), matching the check
+  workflows; the dead "Generate version" step of the PR validation build
+  (and the "Install Bun" step that existed only to serve it) was removed —
+  that job passes its metadata as explicit build-args; `docker-compose.yml`
+  gained a comment explaining the explicit 1m `stop_grace_period`
+  (Docker's default grace period is 10s).
+- Stale module exports that no caller referenced were removed.
+- The pre-commit hook now delegates to the package scripts (`fmt:check`,
+  `typecheck`, `lint`) instead of inlining them, keeping the gate
+  consistent with `bun run ltf:check`; the plain (no `--retry`) `bun test`
+  in the hook is deliberate.
+- Docs pass: README gained the full command list and corrected run
+  instructions (`bun run main` / `bun run dev`), an accurate dynamic
+  worker-pool bullet, the `src/locales/` path, and real graceful-shutdown
+  observation steps (the previously referenced test script does not
+  exist); TESTING.md documents the `LIVE_API_TESTS` opt-in;
+  `.env.example` documents `FEATURE_ROAST` / `ROAST_CHANCE`;
+  CONTRIBUTING documents enabling the `.githooks/` pre-commit hooks.
 
 ### Known Issues (preview)
 
@@ -49,6 +89,14 @@ All notable changes to this project will be documented in this file.
   an unpublished Deno/JSR package and cannot be installed.
 - `bun test` can occasionally exit non-zero from a workerpool flake; CI runs it
   with `--retry=5`.
+- npm.jsr.io has been stalling or resetting connections from every network
+  path tested, so the frozen installs can keep CI red until grammY v2 ships
+  a proper npm release. An offline fallback has been spike-verified: copying
+  the locally cached beta.6 packages into a `file:`-dependency vendor tree
+  installs and boots with the registry resolved to a dead endpoint. The
+  vendored package's own dependency must be rewired to a relative `file:`
+  reference, since a registry range (`^0.3.1`) otherwise still hits the
+  network.
 
 </details>
 
