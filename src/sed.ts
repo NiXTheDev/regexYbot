@@ -17,31 +17,18 @@ const { MAX_CHAIN_LENGTH, MAX_MESSAGE_LENGTH, WORKER_TIMEOUT_MS } = CONFIG;
 
 /**
  * Track performance message info for edit handling
+ *
+ * One entry per (chat, target) pair: whenever a run produces a fresh
+ * separate performance message for a target, the entry of the previous
+ * run is deleted along with its message, so repeated commands and edits
+ * never accumulate stale timing readouts.
  */
 interface PerformanceMessageInfo {
 	chatId: number;
 	targetMessageId: number;
-	resultMessageId: number;
-	performanceMessageId?: number;
-	isInlined: boolean;
+	performanceMessageId: number;
 	timestamp: number;
 }
-
-// In-memory storage for performance message tracking (no persistence)
-const performanceMessageTracker = new Map<string, PerformanceMessageInfo>();
-
-// Cleanup old entries after 48 hours (matching Telegram edit window)
-setInterval(
-	() => {
-		const cutoff = Date.now() - 48 * 60 * 60 * 1000;
-		for (const [key, info] of performanceMessageTracker) {
-			if (info.timestamp < cutoff) {
-				performanceMessageTracker.delete(key);
-			}
-		}
-	},
-	60 * 60 * 1000,
-); // Run cleanup every hour
 
 /**
  * Format duration in human-readable units
@@ -249,8 +236,33 @@ export interface SedHandlerDependencies {
 export class SedHandler {
 	private logger: Logger;
 
+	/**
+	 * In-memory tracking of the live separate performance message per
+	 * (chat, target) pair — no persistence. Owned by the handler instance:
+	 * production constructs exactly one handler, while fresh instances
+	 * (tests included) never share cleanup state.
+	 */
+	private readonly performanceMessageTracker = new Map<
+		string,
+		PerformanceMessageInfo
+	>();
+
 	constructor(private deps: SedHandlerDependencies) {
 		this.logger = new Logger("SedHandler");
+
+		// Prune tracking entries older than 48 hours (Telegram's edit
+		// window) once an hour.
+		setInterval(
+			() => {
+				const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+				for (const [key, info] of this.performanceMessageTracker) {
+					if (info.timestamp < cutoff) {
+						this.performanceMessageTracker.delete(key);
+					}
+				}
+			},
+			60 * 60 * 1000,
+		);
 	}
 
 	async handleSedCommand(
@@ -426,21 +438,36 @@ export class SedHandler {
 			await ctx.api.sendMessage(ctx.chat.id, roast);
 		}
 
+		// A previous run against the same target may have left a separate
+		// performance message behind. Remove it (and its tracking entry) so
+		// repeated commands and edits never accumulate stale timing readouts,
+		// including edits that stop using the performance flag entirely.
+		const trackedChatId = ctx.chat?.id;
+		if (trackedChatId !== undefined) {
+			const key = `${trackedChatId}:${targetMsgId}`;
+			const stale = this.performanceMessageTracker.get(key);
+			if (stale) {
+				this.performanceMessageTracker.delete(key);
+				ctx.api
+					.deleteMessage(stale.chatId, stale.performanceMessageId)
+					.catch(() =>
+						this.logger.debug("Failed to delete stale performance message"),
+					);
+			}
+		}
+
 		// Send separate performance message if needed
 		if (performanceText) {
 			const sentPerfMsg = await ctx.sendMessage(performanceText);
-			// Store tracking info for edit handling
+			// Store tracking info so a later run against the same target can
+			// remove this message before producing its own.
 			const chatId = ctx.chat?.id;
 			if (chatId) {
 				const key = `${chatId}:${targetMsgId}`;
-				// We need the result message ID - get it from the bot_replies tracking
-				// This will be updated when sendOrEditReply stores it
-				performanceMessageTracker.set(key, {
+				this.performanceMessageTracker.set(key, {
 					chatId,
 					targetMessageId: targetMsgId,
-					resultMessageId: 0, // Will be updated
 					performanceMessageId: sentPerfMsg.message_id,
-					isInlined: false,
 					timestamp: Date.now(),
 				});
 			}

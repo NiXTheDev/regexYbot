@@ -361,3 +361,74 @@ describe("SedHandler dangerous pattern warning", () => {
 		expect(sendOrEditReplyCalls[0]?.messageText).toBe("substituted text");
 	});
 });
+
+describe("SedHandler performance message tracking", () => {
+	function perfSetup() {
+		// Long enough result that result + performance text cannot fit inline,
+		// forcing the separate (tracked) performance message to be sent.
+		const longResult = "b".repeat(20_000);
+		let nextMessageId = 100;
+		const deleted: number[] = [];
+
+		const ctx = {
+			chat: { id: 123, type: "group" },
+			from: { id: 456 },
+			sendMessage: async () => ({ message_id: ++nextMessageId }),
+			api: {
+				sendMessage: async () => ({ message_id: 1 }),
+				deleteMessage: async (_chatId: number, messageId: number) => {
+					deleted.push(messageId);
+				},
+			},
+		} as unknown as MyContext;
+
+		const workerPool = {
+			run: async () => ({ result: longResult, performanceMs: null }),
+		} as unknown as WorkerPool;
+
+		const handler = new SedHandler({
+			workerPool,
+			sendOrEditReply: async () => {},
+		});
+
+		return { handler, ctx, deleted };
+	}
+
+	async function flushMicrotasks(): Promise<void> {
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	}
+
+	test("tracks a separate performance message per substitution", async () => {
+		const { handler, ctx, deleted } = perfSetup();
+		await handler.handleSedCommand(ctx, ["s/a/b/p"], "aaa", 42, false);
+		await flushMicrotasks();
+		// Result message (via sendOrEditReply mock) + one perf message, none deleted.
+		expect(deleted).toEqual([]);
+	});
+
+	test("removes the previous performance message on a repeat run", async () => {
+		const { handler, ctx, deleted } = perfSetup();
+		await handler.handleSedCommand(ctx, ["s/a/b/p"], "aaa", 42, false);
+		await handler.handleSedCommand(ctx, ["s/c/d/p"], "ccc", 42, true);
+		await flushMicrotasks();
+		// The first run's performance message (id 101) must be deleted;
+		// the second run's own message (id 102) is the current one.
+		expect(deleted).toEqual([101]);
+	});
+
+	test("cleans stale performance message when an edit drops the flag", async () => {
+		const { handler, ctx, deleted } = perfSetup();
+		await handler.handleSedCommand(ctx, ["s/a/b/p"], "aaa", 42, false);
+		await handler.handleSedCommand(ctx, ["s/c/d/"], "ccc", 42, true);
+		await flushMicrotasks();
+		expect(deleted).toEqual([101]);
+	});
+
+	test("does not delete anything when no performance message was tracked", async () => {
+		const { handler, ctx, deleted } = perfSetup();
+		await handler.handleSedCommand(ctx, ["s/a/b/"], "aaa", 42, false);
+		await handler.handleSedCommand(ctx, ["s/c/d/"], "ccc", 42, true);
+		await flushMicrotasks();
+		expect(deleted).toEqual([]);
+	});
+});
