@@ -5,6 +5,7 @@ This document describes how to test the regexYbot, with a focus on graceful shut
 ## Table of Contents
 
 - [Automated Tests](#automated-tests)
+- [Live API Tests](#live-api-tests)
 - [Manual Testing](#manual-testing)
   - [Graceful Shutdown](#graceful-shutdown)
   - [Docker Testing](#docker-testing)
@@ -29,6 +30,18 @@ bun test src/tests/shutdown.test.ts  # Requires TOKEN env var
 ```
 
 **Note:** The shutdown integration tests require a valid `TOKEN` environment variable. If TOKEN is not set, these tests will be skipped automatically.
+
+## Live API Tests
+
+`telegram.test.ts` contains opt-in tests that call the real Telegram
+Bot API. They are skipped by default; run them explicitly with:
+
+```bash
+LIVE_API_TESTS=1 bun test src/tests/telegram.test.ts
+```
+
+These tests additionally require `TOKEN` to be configured. Every other
+test file runs fully offline.
 
 ## Manual Testing
 

@@ -92,8 +92,16 @@ git push origin feature/my-feature
    ```
 
 3. Run the bot in development mode:
+
    ```bash
    bun run dev
+   ```
+
+4. Enable the pre-commit hooks (prettier + typecheck + tests run on
+   every commit; the hook set lives in `.githooks/`):
+
+   ```bash
+   git config core.hooksPath .githooks
    ```
 
 ---

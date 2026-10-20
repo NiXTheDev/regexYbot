@@ -7,7 +7,7 @@ A fast, efficient, and feature-rich Telegram bot built with [grammY](https://git
 - **Sed-Style Substitution:** Use `s/pattern/replacement/flags` commands to perform regex substitutions on messages within the chat history or on specific replies.
 - **Edit Support:** Edit your `s/.../.../` commands, and the bot will automatically update its corresponding reply with the new substitution result.
 - **High-Performance Worker Pool:** Regex operations are offloaded to a pool of [Bun Worker](https://bun.sh/docs/api/workers) threads, ensuring the bot remains responsive even under heavy load or with complex patterns.
-- **Dynamic Worker Pool V2:** Optional advanced worker pool with dynamic scaling, health monitoring, and automatic idle worker termination.
+- **Dynamic Scaling & Self-Reporting:** The worker pool scales up under load, sheds idle workers, and reports health state and queue wait times via `/health` and `/metrics`.
 - **Performance Timing:** Use the `p` flag (e.g., `s/pattern/repl/p`) to measure and display the execution time of the substitution chain.
 - **Regex Pattern Caching:** LRU cache with TTL for compiled regex patterns, significantly improving performance for repeated patterns.
 - **Per-User Rate Limiting:** Configurable rate limiting to prevent spam and abuse (default: 30 commands/minute per user).
@@ -46,16 +46,23 @@ regexYbot supports multiple languages with automatic detection based on Telegram
 - `/language list` - List all available languages
 - `/language set <code>` - Change language (e.g., `/language set de`)
 
-The bot automatically detects your language from Telegram settings. If your language isn't supported, it falls back to English. Translations are stored in the `locales/` directory using the [Fluent](https://projectfluent.org/) format. Contributions for new languages or improvements are welcome!
+The bot automatically detects your language from Telegram settings. If your language isn't supported, it falls back to English. Translations are stored in the `src/locales/` directory using the [Fluent](https://projectfluent.org/) format. Contributions for new languages or improvements are welcome!
 
 ## Commands
 
-- `/start`: Get a greeting message and a brief guide on how to use the bot.
-- `/privacy`: Displays the bot's privacy policy.
-- `s/find/replace/flags`: Performs a regex substitution.
+- `s/find/replace/flags`: Performs a regex substitution (just send it as a message).
   - **Example:** `s/old/new/gi` replaces all occurrences of "old" (case-insensitive) with "new".
   - **Example with Groups:** `s/(\w+) (\w+)/$2 $1/`(modern way), or `s/(\w+) (\w+)/\2 \1/`(old regexbot, legacy way) swaps the first two words in a message, regexy supports both modes at the same time, mixing(`/$2 \1/`) is supported too.
   - **Example with Performance:** `s/complex_pattern/replacement/gip` performs a global, case-insensitive substitution and prints the execution time.
+- `/start`: Get a greeting message and a brief guide on how to use the bot.
+- `/regexhelp`: Interactive regex syntax guide with browsable categories.
+- `/explain <pattern>`: Tokenized explanation of a regex pattern.
+- `/language`: Show your current language, list languages (`/language list`), or change it (`/language set <code>`).
+- `/health`: Live health snapshot (worker count, queue, error rate, uptime).
+- `/metrics`: Performance metrics (cache, substitutions, compilations, queue waits).
+- `/version`: Build and version information.
+- `/diff`: Diff preview of the last `s/.../.../` substitution in the chat.
+- `/privacy`: The bot's privacy policy. In private chats it also offers a "Delete my stored data" button that wipes this chat's stored message history and reply mappings on request.
 
 ## Environment Variables
 
@@ -139,8 +146,9 @@ Pre-built binaries are available for Linux and Windows:
     ```
 4.  Run the bot from the project's root directory:
     ```bash
-    bun index.ts
+    bun run main
     ```
+    For development with auto-restart on changes, use `bun run dev`.
 
 ## Data Persistence
 
@@ -250,19 +258,17 @@ services:
 
 ### Testing Graceful Shutdown
 
-A test script is provided to verify graceful shutdown behavior:
+Observe the behavior directly - stop the container and follow its logs:
 
 ```bash
-cd docker
-./test-graceful-shutdown.sh
+docker compose stop regexybot
+docker compose logs -f
 ```
 
-This tests:
-
-- Immediate shutdown behavior
-- Graceful drain with pending tasks
-- Docker Compose stop/restart scenarios
-- SIGINT vs SIGTERM handling
+The logs show which shutdown mode was in effect: immediate shutdown
+(queued tasks rejected) or, with `GRACEFUL_DRAIN=true`, task draining
+before the worker pool stops. For a full manual walkthrough (SIGINT,
+SIGTERM, idempotency, short-timeout SIGKILL), see [TESTING.md](TESTING.md).
 
 ## License
 
