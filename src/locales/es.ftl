@@ -20,6 +20,13 @@ command-start = ¡Hola! Soy un bot de regex. Usa s/find/replace/flags para susti
 
 command-privacy = Este bot no recopila ni procesa datos de usuario, aparte de un breve historial de mensajes para realizar sustituciones regex. Estos se almacenan en una base de datos SQL en memoria durante 48 horas y no pueden ser accedidos por el administrador del bot de ninguna manera.
 
+privacy-delete-button = Eliminar mis datos guardados
+privacy-delete-confirmation = Esto elimina ahora mismo todos los mensajes guardados y las respuestas del bot de este chat. No se puede deshacer.
+privacy-delete-apply = Sí, borrar todo
+privacy-delete-cancel = Cancelar
+privacy-delete-done = Se han borrado todos los datos guardados de este chat.
+privacy-private-only = Esta acción solo está disponible en chats privados.
+
 command-language-usage = Uso:
     /language - Mostrar idioma actual
     /language list - Mostrar idiomas disponibles

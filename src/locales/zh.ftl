@@ -20,6 +20,13 @@ command-start = 你好！我是一个正则表达式机器人。使用 s/find/re
 
 command-privacy = 除了用于执行正则表达式替换的短消息历史记录外，此机器人不会收集或处理任何用户数据。这些数据在内存中的 SQL 数据库中存储 48 小时，机器人管理员无法以任何方式访问。
 
+privacy-delete-button = 删除我的已存数据
+privacy-delete-confirmation = 这将立即删除此聊天中所有已存的消息和机器人回复，且无法撤销。
+privacy-delete-apply = 是的，全部删除
+privacy-delete-cancel = 取消
+privacy-delete-done = 已删除此聊天的所有已存数据。
+privacy-private-only = 此操作仅在私聊中可用。
+
 command-language-usage = 使用方法：
     /language - 显示当前语言
     /language list - 显示可用语言

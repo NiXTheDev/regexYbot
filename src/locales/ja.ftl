@@ -20,6 +20,13 @@ command-start = こんにちは！私は正規表現ボットです。s/find/rep
 
 command-privacy = このボットは、正規表現による置換を実行するための短いメッセージ履歴を除き、ユーザーデータを収集または処理しません。これらはインメモリSQLデータベースに48時間保存され、ボット管理者がいかなる方法でもアクセスすることはできません。
 
+privacy-delete-button = 保存されたデータを削除
+privacy-delete-confirmation = このチャットの保存済みメッセージとボットの返信をすべて今すぐ削除します。この操作は元に戻せません。
+privacy-delete-apply = はい、すべて削除
+privacy-delete-cancel = キャンセル
+privacy-delete-done = このチャットの保存されたデータをすべて削除しました。
+privacy-private-only = この操作はプライベートチャットでのみ利用できます。
+
 command-language-usage = 使用方法：
     /language - 現在の言語を表示
     /language list - 利用可能な言語を表示

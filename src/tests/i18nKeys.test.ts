@@ -79,4 +79,21 @@ describe("i18n key coverage", () => {
 		expect(references).toBeGreaterThan(0);
 		expect(enKeys.size).toBeGreaterThan(0);
 	});
+
+	test("every locale defines the same key set as en", () => {
+		const enKeys = parseKeys(
+			readFileSync(join(LOCALES_DIR, "en.ftl"), "utf-8"),
+		);
+
+		for (const file of readdirSync(LOCALES_DIR)) {
+			if (!file.endsWith(".ftl")) continue;
+			const keys = parseKeys(readFileSync(join(LOCALES_DIR, file), "utf-8"));
+			const missing = [...enKeys].filter((k) => !keys.has(k));
+			const extra = [...keys].filter((k) => !enKeys.has(k));
+			// Diff-style failure message points straight at the offender.
+			expect(
+				`${file}: missing=[${missing.join(",")}] extra=[${extra.join(",")}]`,
+			).toBe(`${file}: missing=[] extra=[]`);
+		}
+	});
 });

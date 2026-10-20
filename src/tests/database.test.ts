@@ -171,4 +171,33 @@ describe("DatabaseService", () => {
 			);
 		});
 	});
+
+	describe("delete my data (privacy removal)", () => {
+		test("deleteAllMessages removes every stored message of the chat", async () => {
+			const chatId = 77701;
+			await dbService.storeMessageInHistory(chatId, 1, "one");
+			await dbService.storeMessageInHistory(chatId, 2, "two");
+			await dbService.storeMessageInHistory(chatId + 1, 3, "other chat");
+
+			await dbService.deleteAllMessages(chatId);
+
+			expect(await dbService.findMessagesInHistory(chatId)).toEqual([]);
+			// Other chats stay untouched.
+			expect((await dbService.findMessagesInHistory(chatId + 1)).length).toBe(
+				1,
+			);
+		});
+
+		test("deleteAllReplies removes every reply mapping of the chat", async () => {
+			const chatId = 77702;
+			await dbService.storeBotReplyMapping(1, chatId, 900, "s/a/b/");
+			await dbService.storeBotReplyMapping(2, chatId, 901, "s/c/d/");
+			await dbService.storeBotReplyMapping(3, chatId + 1, 902, "s/e/f/");
+
+			await dbService.deleteAllReplies(chatId);
+
+			expect(await dbService.findRepliesInHistory(chatId)).toEqual([]);
+			expect((await dbService.findRepliesInHistory(chatId + 1)).length).toBe(1);
+		});
+	});
 });

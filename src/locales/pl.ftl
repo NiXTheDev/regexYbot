@@ -20,6 +20,13 @@ command-start = Cześć! Jestem botem regex. Użyj s/find/replace/flags, aby zam
 
 command-privacy = Ten bot nie zbiera ani nie przetwarza danych użytkowników, poza krótkim historią wiadomości do wykonywania podstawień regex. Są one przechowywane w pamięciowej bazie danych SQL przez 48 godzin i nie mogą być w żaden sposób dostępne dla administratora bota.
 
+privacy-delete-button = Usuń moje zapisane dane
+privacy-delete-confirmation = Spowoduje to natychmiastowe usunięcie wszystkich zapisanych wiadomości i odpowiedzi bota z tego czatu. Tej operacji nie można cofnąć.
+privacy-delete-apply = Tak, usuń wszystko
+privacy-delete-cancel = Anuluj
+privacy-delete-done = Wszystkie zapisane dane tego czatu zostały usunięte.
+privacy-private-only = Ta akcja jest dostępna tylko na czatach prywatnych.
+
 command-language-usage = Użycie:
     /language - Pokaż aktualny język
     /language list - Pokaż dostępne języki

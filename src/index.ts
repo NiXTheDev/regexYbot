@@ -573,7 +573,17 @@ myCommands.command("privacy", "Show privacy information", async (ctx) => {
 			// Fall back to current locale if switching fails
 		}
 	}
-	await ctx.sendMessage(ctx.t("command-privacy"));
+	// Data deletion is only offered in private chats, where chat-scoped
+	// storage equals the requesting user's own data.
+	const deleteButton =
+		ctx.chat?.type === "private"
+			? new InlineKeyboard().row(
+					InlineKeyboard.text(ctx.t("privacy-delete-button"), "privacy:delete"),
+				)
+			: undefined;
+	await ctx.sendMessage(ctx.t("command-privacy"), {
+		reply_markup: deleteButton,
+	});
 });
 myCommands.command("start", "Get a greeting message", async (ctx) => {
 	await ctx.sendMessage(ctx.t("command-start"), { parse_mode: "Markdown" });
@@ -805,6 +815,59 @@ bot.on("callback_query:data", async (ctx) => {
 			}
 		}
 		await ctx.answerCallbackQuery();
+		return;
+	}
+
+	// Privacy data deletion flow (button on /privacy). Buttons survive
+	// message forwarding, so the whole flow is guarded to private chats,
+	// where chat-scoped storage is the requester's own data.
+	if (data && data.startsWith("privacy:")) {
+		try {
+			const action = data.split(":")[1];
+			if (ctx.chat?.type !== "private") {
+				await ctx.answerCallbackQuery(ctx.t("privacy-private-only"));
+				return;
+			}
+
+			if (action === "delete") {
+				const confirmKeyboard = new InlineKeyboard()
+					.row(
+						InlineKeyboard.text(ctx.t("privacy-delete-apply"), "privacy:apply"),
+					)
+					.row(
+						InlineKeyboard.text(
+							ctx.t("privacy-delete-cancel"),
+							"privacy:cancel",
+						),
+					);
+				await ctx.editMessageText(ctx.t("privacy-delete-confirmation"), {
+					reply_markup: confirmKeyboard,
+				});
+			} else if (action === "apply") {
+				await dbService.deleteAllMessages(ctx.chat!.id);
+				await dbService.deleteAllReplies(ctx.chat!.id);
+				logger.info(
+					`Privacy: user ${ctx.from?.id} deleted all stored data for chat ${ctx.chat!.id}`,
+				);
+				await ctx.editMessageText(ctx.t("privacy-delete-done"));
+			} else if (action === "cancel") {
+				await ctx.editMessageText(ctx.t("command-privacy"), {
+					reply_markup: new InlineKeyboard().row(
+						InlineKeyboard.text(
+							ctx.t("privacy-delete-button"),
+							"privacy:delete",
+						),
+					),
+				});
+			} else if (action !== undefined) {
+				logger.warn(`Unknown privacy callback action: ${action}`);
+			}
+
+			await ctx.answerCallbackQuery();
+		} catch (error) {
+			logger.error(`Privacy callback error: ${error}`);
+			await ctx.answerCallbackQuery(ctx.t("general-error"));
+		}
 		return;
 	}
 
