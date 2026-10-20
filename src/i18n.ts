@@ -9,7 +9,18 @@ import type { Context } from "grammy";
 import type { CommandsFlavor } from "@grammyjs/commands";
 import type { HydrateFlavor } from "@grammyjs/hydrate";
 import type { SessionFlavor } from "./session";
-import path from "node:path";
+
+import enLocaleSource from "./locales/en.ftl" with { type: "text" };
+import deLocaleSource from "./locales/de.ftl" with { type: "text" };
+import itLocaleSource from "./locales/it.ftl" with { type: "text" };
+import plLocaleSource from "./locales/pl.ftl" with { type: "text" };
+import svLocaleSource from "./locales/sv.ftl" with { type: "text" };
+import esLocaleSource from "./locales/es.ftl" with { type: "text" };
+import ruLocaleSource from "./locales/ru.ftl" with { type: "text" };
+import ukLocaleSource from "./locales/uk.ftl" with { type: "text" };
+import jaLocaleSource from "./locales/ja.ftl" with { type: "text" };
+import koLocaleSource from "./locales/ko.ftl" with { type: "text" };
+import zhLocaleSource from "./locales/zh.ftl" with { type: "text" };
 
 // Session data interface
 export interface SessionData {
@@ -76,13 +87,46 @@ export const AVAILABLE_LANGUAGES: Language[] = [
 ];
 
 /**
+ * Fluent translation sources for every supported locale, imported as
+ * inline text.
+ *
+ * This deliberately replaces the previous `directory:
+ * path.resolve("src/locales")` plugin option: a runtime fs path only
+ * works when the process is started from a working directory that
+ * contains `src/locales/`, which `bun build --compile` binaries do not
+ * have (the plugin walks the directory in its constructor and throws
+ * ENOENT at boot, so shipped executables crashed unless run from a
+ * repository checkout). Text imports are inlined into `bun run` and
+ * embedded into compiled binaries alike, with no CWD dependence.
+ */
+const LOCALE_SOURCES: ReadonlyArray<[locale: LanguageCode, source: string]> = [
+	["en", enLocaleSource],
+	["de", deLocaleSource],
+	["it", itLocaleSource],
+	["pl", plLocaleSource],
+	["sv", svLocaleSource],
+	["es", esLocaleSource],
+	["ru", ruLocaleSource],
+	["uk", ukLocaleSource],
+	["ja", jaLocaleSource],
+	["ko", koLocaleSource],
+	["zh", zhLocaleSource],
+];
+
+/**
  * Initialize i18n with grammY plugin
  */
 export const i18n = new I18n<MyContext>({
 	defaultLocale: "en",
 	useSession: true, // Persist the chosen language in the session (see ./session.ts)
-	directory: path.resolve("src/locales"), // Load .ftl files from src/locales/
 });
+
+for (const [locale, source] of LOCALE_SOURCES) {
+	// loadLocaleSync derives isDefault ("en") from defaultLocale and
+	// tracks the locale in i18n.locales, exactly like the previous
+	// directory-based loading did.
+	i18n.loadLocaleSync(locale, { source });
+}
 
 /**
  * Get language info by code
