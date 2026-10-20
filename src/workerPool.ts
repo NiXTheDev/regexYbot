@@ -668,6 +668,8 @@ export class WorkerPool {
 		}
 		this.workers.clear();
 
-		logger.info("WorkerPool shut down complete");
+		logger.info(
+			`WorkerPool shut down complete (last health status: ${this.healthMonitor.getStatus()})`,
+		);
 	}
 }

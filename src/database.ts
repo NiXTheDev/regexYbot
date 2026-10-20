@@ -1,5 +1,5 @@
 import { sql, SQL } from "bun";
-import { CONFIG } from "./config";
+import { CONFIG, DERIVED } from "./config";
 import { Logger } from "./logger";
 import { SED_PATTERN, getRegexFlags, getCachedRegex } from "./utils";
 import type { MyContext } from "./i18n";
@@ -60,7 +60,7 @@ export class DatabaseService {
 			.db`DELETE FROM bot_replies WHERE timestamp < ${cutoffTime}`;
 		if (historyResult.count > 0 || repliesResult.count > 0) {
 			logger.info(
-				`Cleaned up ${historyResult.count} history entries and ${repliesResult.count} reply mappings.`,
+				`Cleaned up ${historyResult.count} history entries and ${repliesResult.count} reply mappings (retention: ${DERIVED.CLEANUP_HOURS}h).`,
 			);
 		}
 	}

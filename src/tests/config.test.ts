@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { CONFIG } from "../config";
+import { CONFIG, isLogLevelEnabled } from "../config";
 
 describe("Configuration", () => {
 	describe("Required variables", () => {
@@ -139,6 +139,11 @@ describe("Configuration", () => {
 			expect(CONFIG.FEATURE_WARNINGS).toBeDefined();
 			expect(typeof CONFIG.FEATURE_WARNINGS).toBe("boolean");
 		});
+
+		test("should have FEATURE_TIPS_SIGNIFICANT_ONLY defined as boolean", () => {
+			expect(CONFIG.FEATURE_TIPS_SIGNIFICANT_ONLY).toBeDefined();
+			expect(typeof CONFIG.FEATURE_TIPS_SIGNIFICANT_ONLY).toBe("boolean");
+		});
 	});
 
 	describe("Configuration immutability", () => {
@@ -147,5 +152,27 @@ describe("Configuration", () => {
 				(CONFIG as unknown as Record<string, unknown>)["TOKEN"] = "modified";
 			}).toThrow();
 		});
+	});
+});
+
+describe("isLogLevelEnabled", () => {
+	// Severity order of VALID_LOG_LEVELS minus "none" (mirrors config.ts).
+	const ORDER = ["debug", "info", "warn", "error", "fatal"] as const;
+
+	test("always enables the configured level", () => {
+		expect(isLogLevelEnabled(CONFIG.LOG_LEVEL)).toBe(true);
+	});
+
+	test("enables exactly the levels at or above the configured level", () => {
+		if (CONFIG.LOG_LEVEL === "none") {
+			for (const level of ORDER) {
+				expect(isLogLevelEnabled(level)).toBe(false);
+			}
+			return;
+		}
+		const index = ORDER.indexOf(CONFIG.LOG_LEVEL);
+		for (const [i, level] of ORDER.entries()) {
+			expect(isLogLevelEnabled(level)).toBe(i >= index);
+		}
 	});
 });

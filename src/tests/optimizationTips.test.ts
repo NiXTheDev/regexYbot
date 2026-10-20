@@ -2,8 +2,11 @@ import { describe, test, expect } from "bun:test";
 import {
 	analyzePatternForTips,
 	formatTip,
+	getBestTip,
+	hasSignificantImprovement,
 	sendTransientTip,
 } from "../optimizationTips";
+import type { OptimizationTip } from "../optimizationTips";
 
 describe("analyzePatternForTips", () => {
 	test("does not flag \\S as unnecessary", () => {
@@ -165,5 +168,54 @@ describe("sendTransientTip", () => {
 		await sendTransientTip(ctx, tip, 100);
 		await new Promise((resolve) => setTimeout(resolve, 15));
 		expect(getDeleted()).toEqual([]);
+	});
+});
+
+describe("tip significance gating", () => {
+	const minorTip: OptimizationTip = {
+		pattern: "\\e",
+		suggestion: "remove unnecessary escaping",
+		reason: "matches literal e",
+		severity: "minor",
+	};
+	const moderateTip: OptimizationTip = {
+		pattern: ".*",
+		suggestion: ".*?",
+		reason: "lazy quantifier can be faster for large texts",
+		severity: "moderate",
+	};
+
+	test("minor-only tip sets are not significant", () => {
+		expect(hasSignificantImprovement([minorTip])).toBe(false);
+	});
+
+	test("moderate and significant tips count as significant", () => {
+		expect(hasSignificantImprovement([moderateTip])).toBe(true);
+		expect(hasSignificantImprovement([minorTip, moderateTip])).toBe(true);
+	});
+
+	test("empty tip sets are not significant", () => {
+		expect(hasSignificantImprovement([])).toBe(false);
+	});
+
+	test("significantOnly gates minor-only patterns out of getBestTip", () => {
+		const minorOnlyPattern = "\\e";
+
+		// Default behavior keeps cosmetic tips.
+		expect(getBestTip(minorOnlyPattern, 91_101)).not.toBeNull();
+
+		// Gated mode suppresses them entirely.
+		expect(
+			getBestTip(minorOnlyPattern, 91_102, undefined, {
+				significantOnly: true,
+			}),
+		).toBeNull();
+	});
+
+	test("significantOnly keeps patterns with moderate tips", () => {
+		const tip = getBestTip("abcdefgh.*x", 91_103, undefined, {
+			significantOnly: true,
+		});
+		expect(tip).not.toBeNull();
 	});
 });

@@ -1,12 +1,7 @@
-import { LOG_LEVELS, LogLevel } from "./types";
-import { CONFIG } from "./config";
+import { LogLevel } from "./types";
+import { CONFIG, isLogLevelEnabled } from "./config";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-const globalLogLevel = CONFIG.LOG_LEVEL;
-const globalLogLevelValue =
-	globalLogLevel === "none"
-		? Infinity
-		: LOG_LEVELS[globalLogLevel as Exclude<LogLevel, "none">];
 const logTemplate = CONFIG.LOG_TEMPLATE;
 
 /**
@@ -86,10 +81,8 @@ export class Logger {
 		message: string,
 		...args: unknown[]
 	) {
-		// If the global level is 'none', do nothing.
-		if (globalLogLevel === "none") return;
-
-		if (LOG_LEVELS[level] < globalLogLevelValue) return;
+		// Emit only when the configured global level allows it.
+		if (!isLogLevelEnabled(level)) return;
 
 		const cid = getCorrelationId();
 

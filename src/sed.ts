@@ -500,7 +500,9 @@ export class SedHandler {
 					if (!match) continue;
 
 					const pattern = (match[1] ?? "").replace(/\\\//g, "/");
-					const tip = getBestTip(pattern, userId, match[2]);
+					const tip = getBestTip(pattern, userId, match[2], {
+						significantOnly: CONFIG.FEATURE_TIPS_SIGNIFICANT_ONLY,
+					});
 
 					if (tip) {
 						await sendTransientTip(ctx, tip);

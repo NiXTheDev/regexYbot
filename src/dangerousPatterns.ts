@@ -224,7 +224,11 @@ export function formatDangerousPatternWarning(
 
 	lines.push("⚠️ Warning: This pattern may cause performance issues\n");
 	lines.push(`Pattern: ${result.pattern}`);
-	lines.push(`Risk Score: ${result.complexityScore}/100\n`);
+	// Human-readable complexity tier for the computed risk score.
+	const { level } = analyzePatternComplexity(result.pattern);
+	lines.push(
+		`Complexity: ${level} (risk score: ${result.complexityScore}/100)\n`,
+	);
 
 	lines.push("Issues found:");
 	for (const issue of result.issues) {

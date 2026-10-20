@@ -198,8 +198,15 @@ export function getBestTip(
 	pattern: string,
 	userId: number,
 	replacement?: string,
+	options?: { significantOnly?: boolean },
 ): OptimizationTip | null {
 	const tips = analyzePatternForTips(pattern, replacement);
+
+	// When significantOnly is set, patterns whose only findings are
+	// cosmetic (minor) tips produce no tip at all.
+	if (options?.significantOnly && !hasSignificantImprovement(tips)) {
+		return null;
+	}
 
 	if (tips.length === 0) {
 		return null;
@@ -230,11 +237,13 @@ export function getBestTip(
 }
 
 /**
- * Check if pattern is significantly improvable
- * Returns true if there's at least one moderate or significant tip
+ * Check if analyzed tips include an improvement worth interrupting the
+ * user for: moderate or significant. Minor tips are cosmetic and only
+ * useful when cosmetic-tip suggestions are still worth surfacing.
  */
-export function hasSignificantImprovement(pattern: string): boolean {
-	const tips = analyzePatternForTips(pattern);
+export function hasSignificantImprovement(
+	tips: readonly OptimizationTip[],
+): boolean {
 	return tips.some(
 		(tip) => tip.severity === "moderate" || tip.severity === "significant",
 	);

@@ -73,6 +73,7 @@ export interface BotConfig {
 
 	// Feature Toggles
 	readonly FEATURE_TIPS: boolean;
+	readonly FEATURE_TIPS_SIGNIFICANT_ONLY: boolean;
 	readonly FEATURE_WARNINGS: boolean;
 	readonly ROAST_CHANCE: number;
 	readonly FEATURE_ROAST: boolean;
@@ -325,6 +326,10 @@ function loadConfig(): BotConfig {
 
 		// Feature Toggles
 		FEATURE_TIPS: parseBoolEnv("FEATURE_TIPS", true),
+		FEATURE_TIPS_SIGNIFICANT_ONLY: parseBoolEnv(
+			"FEATURE_TIPS_SIGNIFICANT_ONLY",
+			false,
+		),
 		FEATURE_WARNINGS: parseBoolEnv("FEATURE_WARNINGS", true),
 		ROAST_CHANCE: parseFloatEnv("ROAST_CHANCE", 0.0002, 0, 1),
 		FEATURE_ROAST: parseBoolEnv("FEATURE_ROAST", true),
@@ -355,12 +360,17 @@ export const DERIVED = {
 } as const;
 
 /**
+ * Levels that can actually be emitted once "none" is excluded.
+ * Shared with isLogLevelEnabled to avoid re-slicing per call.
+ */
+const LOGGABLE_LEVELS = VALID_LOG_LEVELS.slice(1);
+
+/**
  * Helper to check if a specific log level is enabled.
  */
 export function isLogLevelEnabled(level: LogLevel): boolean {
 	if (CONFIG.LOG_LEVEL === "none") return false;
-	const levels = VALID_LOG_LEVELS.slice(1); // Exclude "none"
-	const currentIndex = levels.indexOf(CONFIG.LOG_LEVEL);
-	const checkIndex = levels.indexOf(level);
+	const currentIndex = LOGGABLE_LEVELS.indexOf(CONFIG.LOG_LEVEL);
+	const checkIndex = LOGGABLE_LEVELS.indexOf(level);
 	return checkIndex >= currentIndex;
 }
