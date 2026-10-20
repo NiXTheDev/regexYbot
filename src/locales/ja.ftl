@@ -23,7 +23,6 @@ command-privacy = このボットは、正規表現による置換を実行す�
 privacy-delete-button = 保存されたデータを削除
 privacy-delete-confirmation = このチャットの保存済みメッセージとボットの返信をすべて今すぐ削除します。この操作は元に戻せません。
 privacy-delete-apply = はい、すべて削除
-privacy-delete-cancel = キャンセル
 privacy-delete-done = このチャットの保存されたデータをすべて削除しました。
 privacy-private-only = この操作はプライベートチャットでのみ利用できます。
 
@@ -45,7 +44,7 @@ command-language-setError = 無効な言語コードです。利用可能なオ�
 substitution-result = 結果：{ $result }
 substitution-noMatch = 一致が見つかりません。
 substitution-multipleResults = { $count }件の置換を適用
-substitution-performance = { $time }で{ $count }件の置換を実行
+substitution-performance = 置換：{ $count } 回（{ $time }）
 
 ## Tips
 tip-optimization = ヒント：{ $suggestion }
@@ -70,8 +69,9 @@ health-errorRate = エラー率：{ $rate }％
 health-uptime = 稼働時間：{ $uptime }
 
 metrics-title = パフォーマンス指標
-metrics-cacheHitRate = キャッシュヒット率：{ $rate }％
-metrics-avgProcessingTime = 平均処理時間：{ $time }ms
+metrics-cacheHitRate = キャッシュ：{ $cached }/{ $max }（ヒット率 { $rate }％、ミス { $misses } 回）
+metrics-avgProcessingTime = 平均待機時間：{ $time }ms
+metrics-maxQueueWait = 最大待機時間：{ $time }ms
 metrics-totalSubstitutions = 総置換数：{ $count }
 metrics-regexCompilations = 正規表現コンパイル数：{ $total }（キャッシュ済み：{ $cached }）
 

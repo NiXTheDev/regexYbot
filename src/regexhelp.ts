@@ -6,6 +6,7 @@
 
 import { InlineKeyboard } from "grammy/keyboard";
 import { escapeMarkdownV2 } from "./utils";
+import type { Translator } from "./i18n";
 
 export interface RegexHelpItem {
 	name: string;
@@ -262,13 +263,18 @@ export function createCategoryKeyboard(): InlineKeyboard {
 
 /**
  * Create item selection keyboard for a category
+ * `t` localizes the back navigation labels; category content stays the
+ * English reference data.
  */
-export function createItemKeyboard(categoryKey: string): InlineKeyboard {
+export function createItemKeyboard(
+	categoryKey: string,
+	t?: Translator,
+): InlineKeyboard {
 	const keyboard = new InlineKeyboard();
 	const category = regexHelpData[categoryKey];
 
 	if (!category) {
-		return keyboard.text("Back", "regexhelp:back");
+		return keyboard.text(t?.("regexHelp-back") ?? "Back", "regexhelp:back");
 	}
 
 	const items = Object.entries(category.items);
@@ -281,7 +287,12 @@ export function createItemKeyboard(categoryKey: string): InlineKeyboard {
 		);
 	}
 
-	keyboard.row(InlineKeyboard.text("Back to Categories", "regexhelp:back"));
+	keyboard.row(
+		InlineKeyboard.text(
+			t?.("regexHelp-backToCategories") ?? "Back to Categories",
+			"regexhelp:back",
+		),
+	);
 
 	return keyboard;
 }
@@ -339,11 +350,17 @@ export function formatCategoryHelp(categoryKey: string): string | null {
 
 /**
  * Get main help message
+ * `t` localizes the title and category prompt; the category list itself
+ * stays the English reference data. Both chrome lines are escaped for
+ * the MarkdownV2 parse mode of the callers.
  */
-export function getMainHelpMessage(): string {
+export function getMainHelpMessage(t?: Translator): string {
 	const lines = [
-		`*Regex Help*\n`,
-		`Select a category to learn about regex syntax:\n`,
+		`*${escapeMarkdownV2(t?.("regexHelp-title") ?? "Regex Help")}*\n`,
+		`${escapeMarkdownV2(
+			t?.("regexHelp-selectCategory") ??
+				"Select a category to learn about regex syntax:",
+		)}\n`,
 	];
 
 	for (const cat of Object.values(regexHelpData)) {

@@ -23,7 +23,6 @@ command-privacy = Цей бот не збирає і не обробляє да�
 privacy-delete-button = Видалити мої збережені дані
 privacy-delete-confirmation = Буде негайно видалено всі збережені повідомлення та відповіді бота цього чату. Цю дію не можна скасувати.
 privacy-delete-apply = Так, видалити все
-privacy-delete-cancel = Скасувати
 privacy-delete-done = Усі збережені дані цього чату видалено.
 privacy-private-only = Ця дія доступна лише в приватних чатах.
 
@@ -45,7 +44,7 @@ command-language-setError = Неприпустимий код мови. Вико
 substitution-result = Результат: { $result }
 substitution-noMatch = Відповідність не знайдено.
 substitution-multipleResults = Застосовано { $count } замін
-substitution-performance = Виконано { $count } замін за { $time }
+substitution-performance = Заміни: { $count } за { $time }
 
 ## Tips
 tip-optimization = Підказка: { $suggestion }
@@ -70,8 +69,9 @@ health-errorRate = Рівень Помилок: { $rate }%
 health-uptime = Час Роботи: { $uptime }
 
 metrics-title = Метрики Продуктивності
-metrics-cacheHitRate = Рівень Попадань у Кеш: { $rate }%
-metrics-avgProcessingTime = Середній Час Обробки: { $time }ms
+metrics-cacheHitRate = Кеш: { $cached }/{ $max } ({ $rate }% попадань, { $misses } промахів)
+metrics-avgProcessingTime = Середній Час Очікування: { $time }ms
+metrics-maxQueueWait = Максимальний Час Очікування: { $time }ms
 metrics-totalSubstitutions = Всього Замін: { $count }
 metrics-regexCompilations = Компіляції Regex: { $total } (у кеші: { $cached })
 

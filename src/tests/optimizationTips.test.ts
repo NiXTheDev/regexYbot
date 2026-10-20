@@ -111,15 +111,20 @@ describe("sendTransientTip", () => {
 		severity: "minor" as const,
 	};
 
-	function createMockCtx(chatType: string) {
+	function createMockCtx(
+		chatType: string,
+		t?: (key: string, args?: Record<string, string | number>) => string,
+	) {
 		let capturedOptions: { receiver_user_id?: number } | undefined;
+		let capturedText: string | undefined;
 		const deleted: number[] = [];
 		const sendMessage = async (
 			_chatId: number,
-			_text: string,
+			text: string,
 			options?: { receiver_user_id?: number },
 		) => {
 			capturedOptions = options;
+			capturedText = text;
 			return { message_id: 1 };
 		};
 		const deleteMessage = async (_chatId: number, messageId: number) => {
@@ -130,8 +135,10 @@ describe("sendTransientTip", () => {
 				api: { sendMessage, deleteMessage },
 				chat: { id: 123, type: chatType },
 				from: { id: 456 },
+				t,
 			},
 			getOptions: () => capturedOptions,
+			getText: () => capturedText,
 			getDeleted: () => deleted,
 		};
 	}
@@ -168,6 +175,39 @@ describe("sendTransientTip", () => {
 		await sendTransientTip(ctx, tip, 100);
 		await new Promise((resolve) => setTimeout(resolve, 15));
 		expect(getDeleted()).toEqual([]);
+	});
+
+	test("keyed kinds render through the translator", async () => {
+		const { ctx, getText } = createMockCtx("group", (key) => `T:${key}`);
+		await sendTransientTip(ctx, {
+			pattern: ".*",
+			suggestion: ".*?",
+			reason: "lazy quantifier can be faster for large texts",
+			severity: "moderate",
+		});
+		expect(getText()).toBe("T:tip-greedy");
+	});
+
+	test("shorthand tips pass shorthand and longform args", async () => {
+		const { ctx, getText } = createMockCtx(
+			"group",
+			(key, args) => `T:${key}(${args?.["shorthand"]}<-${args?.["longform"]})`,
+		);
+		await sendTransientTip(ctx, {
+			pattern: "[0-9]",
+			suggestion: "\\d",
+			reason: "shorthand class",
+			severity: "moderate",
+		});
+		expect(getText()).toBe("T:tip-useShorthand(\\d<-[0-9])");
+	});
+
+	test("kinds without a key keep the plain format even with a translator", async () => {
+		const { ctx, getText } = createMockCtx("private", (key) => `T:${key}`);
+		await sendTransientTip(ctx, tip);
+		expect(getText()).toBe(
+			"> \\e\n- remove unnecessary escaping (matches literal e)",
+		);
 	});
 });
 

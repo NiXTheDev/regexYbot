@@ -23,7 +23,6 @@ command-privacy = Dieser Bot sammelt oder verarbeitet keine Benutzerdaten, auße
 privacy-delete-button = Meine gespeicherten Daten löschen
 privacy-delete-confirmation = Damit werden alle gespeicherten Nachrichten und Bot-Antworten dieses Chats sofort gelöscht. Das kann nicht rückgängig gemacht werden.
 privacy-delete-apply = Ja, alles löschen
-privacy-delete-cancel = Abbrechen
 privacy-delete-done = Alle gespeicherten Daten dieses Chats wurden gelöscht.
 privacy-private-only = Diese Aktion ist nur in privaten Chats verfügbar.
 
@@ -45,7 +44,7 @@ command-language-setError = Ungültiger Sprachcode. Verwende /language list, um 
 substitution-result = Ergebnis: { $result }
 substitution-noMatch = Keine Übereinstimmung gefunden.
 substitution-multipleResults = { $count } Ersetzungen angewendet
-substitution-performance = { $count } Ersetzungen in { $time } ausgeführt
+substitution-performance = Ersetzungen: { $count } in { $time }
 
 ## Tips
 tip-optimization = Tipp: { $suggestion }
@@ -70,8 +69,9 @@ health-errorRate = Fehlerrate: { $rate }%
 health-uptime = Betriebszeit: { $uptime }
 
 metrics-title = Leistungsmetriken
-metrics-cacheHitRate = Cache-Trefferrate: { $rate }%
-metrics-avgProcessingTime = Durchschnittliche Verarbeitungszeit: { $time }ms
+metrics-cacheHitRate = Cache: { $cached }/{ $max } ({ $rate }% Treffer, { $misses } Fehlversuche)
+metrics-avgProcessingTime = Durchschnittliche Wartezeit: { $time }ms
+metrics-maxQueueWait = Maximale Wartezeit: { $time }ms
 metrics-totalSubstitutions = Gesamtzahl der Ersetzungen: { $count }
 metrics-regexCompilations = Regex-Kompilierungen: { $total } (zwischengespeichert: { $cached })
 

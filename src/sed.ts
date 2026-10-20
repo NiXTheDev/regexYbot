@@ -390,7 +390,13 @@ export class SedHandler {
 					);
 				}
 
-				await ctx.sendMessage(botError.getUserMessage());
+				// The error classes identify the failure; the localized text
+				// is resolved here through the error keys.
+				await ctx.sendMessage(
+					botError instanceof RegexError
+						? ctx.t("error-invalidRegex")
+						: ctx.t("error-workerTimeout"),
+				);
 				return;
 			}
 		}
@@ -409,7 +415,10 @@ export class SedHandler {
 
 		if (hasPerformanceFlag && totalPerformanceMs !== null) {
 			const formattedTime = formatDuration(totalPerformanceMs);
-			performanceText = `Performed ${substitutionCount} substitution${substitutionCount !== 1 ? "s" : ""} in ${formattedTime}`;
+			performanceText = ctx.t("substitution-performance", {
+				count: substitutionCount,
+				time: formattedTime,
+			});
 
 			// Calculate if performance text fits inline
 			// Need: result + "\n\n" + performanceText <= MAX_MESSAGE_LENGTH

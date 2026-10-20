@@ -23,7 +23,6 @@ command-privacy = This bot does not collect or process any user data, apart from
 privacy-delete-button = Delete my stored data
 privacy-delete-confirmation = This deletes every stored message and bot reply for this chat right now. This cannot be undone.
 privacy-delete-apply = Yes, delete everything
-privacy-delete-cancel = Cancel
 privacy-delete-done = All stored data for this chat has been deleted.
 privacy-private-only = This action is only available in private chats.
 
@@ -45,7 +44,7 @@ command-language-setError = Invalid language code. Use /language list to see ava
 substitution-result = Result: { $result }
 substitution-noMatch = No match found.
 substitution-multipleResults = Applied { $count } substitutions
-substitution-performance = Performed { $count } substitutions in { $time }
+substitution-performance = Substitutions: { $count } in { $time }
 
 ## Tips
 tip-optimization = Tip: { $suggestion }
@@ -70,8 +69,9 @@ health-errorRate = Error Rate: { $rate }%
 health-uptime = Uptime: { $uptime }
 
 metrics-title = Performance Metrics
-metrics-cacheHitRate = Cache Hit Rate: { $rate }%
-metrics-avgProcessingTime = Avg Processing Time: { $time }ms
+metrics-cacheHitRate = Cache: { $cached }/{ $max } ({ $rate }% hits, { $misses } misses)
+metrics-avgProcessingTime = Avg Queue Wait: { $time }ms
+metrics-maxQueueWait = Max Queue Wait: { $time }ms
 metrics-totalSubstitutions = Total Substitutions: { $count }
 metrics-regexCompilations = Regex Compilations: { $total } (cached: { $cached })
 

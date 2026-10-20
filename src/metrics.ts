@@ -5,6 +5,7 @@
  */
 
 import { getRegexCacheStats } from "./utils";
+import type { Translator } from "./i18n";
 import type { WorkerPool } from "./workerPool";
 
 // Simple in-memory metrics (resets on restart)
@@ -77,57 +78,98 @@ export function formatUptime(ms: number): string {
 }
 
 /**
- * Format health status output
+ * Health status → translation key map. Values fall back to the raw
+ * uppercase status when a status is missing from the map.
  */
-export function formatHealthStatus(metrics: MetricsData): string {
+const HEALTH_STATUS_KEYS: Record<string, string> = {
+	healthy: "health-healthy",
+	degraded: "health-degraded",
+	unhealthy: "health-unhealthy",
+};
+
+/**
+ * Format health status output
+ * `t` resolves the localized chrome; the pool-less "UNKNOWN" fallback
+ * and "Worker pool: Not available" stay literal (no keys defined).
+ */
+export function formatHealthStatus(
+	metrics: MetricsData,
+	t: Translator,
+): string {
 	const lines: string[] = [];
 
-	lines.push(
-		`Bot Health Status: ${metrics.workerStats?.healthStatus.toUpperCase() ?? "UNKNOWN"}\n`,
-	);
+	const rawStatus = metrics.workerStats?.healthStatus;
+	const statusWord = rawStatus
+		? HEALTH_STATUS_KEYS[rawStatus]
+			? t(HEALTH_STATUS_KEYS[rawStatus])
+			: rawStatus.toUpperCase()
+		: "UNKNOWN";
+
+	lines.push(`${t("health-title")}: ${statusWord}\n`);
 
 	if (metrics.workerStats) {
 		lines.push(
-			`Workers: ${metrics.workerStats.busyWorkers} active, ${metrics.workerStats.idleWorkers} idle`,
+			t("health-workers", {
+				active: metrics.workerStats.busyWorkers,
+				idle: metrics.workerStats.idleWorkers,
+			}),
 		);
-		lines.push(`Queue: ${metrics.workerStats.queuedTasks} pending tasks`);
-		lines.push(`Error Rate: ${metrics.workerStats.errorRate}%`);
+		lines.push(t("health-queue", { pending: metrics.workerStats.queuedTasks }));
+		lines.push(t("health-errorRate", { rate: metrics.workerStats.errorRate }));
 	} else {
 		lines.push("Worker pool: Not available");
 	}
 
-	lines.push(`Uptime: ${formatUptime(metrics.uptime)}`);
+	lines.push(t("health-uptime", { uptime: formatUptime(metrics.uptime) }));
 
 	return lines.join("\n");
 }
 
 /**
  * Format metrics output
+ * `t` resolves the localized chrome; "Cache: Disabled" stays literal
+ * (no key defined for the disabled branch).
  */
-export function formatMetrics(metrics: MetricsData): string {
+export function formatMetrics(metrics: MetricsData, t: Translator): string {
 	const lines: string[] = [];
 
-	lines.push("Performance Metrics:\n");
+	lines.push(`${t("metrics-title")}:\n`);
 
 	if (metrics.cacheEnabled) {
 		const hitPercent = (metrics.cacheHitRatio * 100).toFixed(0);
 		lines.push(
-			`Cache: ${metrics.cachedRegexes}/${metrics.cacheMaxSize} (${hitPercent}% hits, ${metrics.cacheMisses} misses)`,
+			t("metrics-cacheHitRate", {
+				cached: metrics.cachedRegexes,
+				max: metrics.cacheMaxSize,
+				rate: hitPercent,
+				misses: metrics.cacheMisses,
+			}),
 		);
 	} else {
 		lines.push("Cache: Disabled");
 	}
 
 	lines.push(
-		`Total Substitutions: ${metrics.totalSubstitutions.toLocaleString()}`,
+		t("metrics-totalSubstitutions", {
+			count: metrics.totalSubstitutions.toLocaleString(),
+		}),
 	);
 	lines.push(
-		`Regex Compilations: ${metrics.totalRegexCompilations.toLocaleString()}`,
+		t("metrics-regexCompilations", {
+			total: metrics.totalRegexCompilations.toLocaleString(),
+			cached: metrics.cachedRegexes.toLocaleString(),
+		}),
 	);
 
 	if (metrics.workerStats) {
-		lines.push(`Avg Queue Wait: ${metrics.workerStats.avgQueueWaitMs}ms`);
-		lines.push(`Max Queue Wait: ${metrics.workerStats.maxQueueWaitMs}ms`);
+		lines.push(
+			t("metrics-avgProcessingTime", {
+				time: metrics.workerStats.avgQueueWaitMs,
+			}),
+		);
+		lines.push(
+			t("metrics-maxQueueWait", { time: metrics.workerStats.maxQueueWaitMs }),
+		);
 	}
 
 	return lines.join("\n");

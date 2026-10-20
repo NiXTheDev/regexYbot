@@ -444,7 +444,7 @@ async function sendOrEditReply(
 		// Only show user message for non-retryable errors
 		if (!telegramError.retryable) {
 			try {
-				await ctx.sendMessage(telegramError.getUserMessage());
+				await ctx.sendMessage(ctx.t("error-telegramAPI"));
 			} catch {
 				// Ignore reply errors
 			}
@@ -590,7 +590,7 @@ myCommands.command("start", "Get a greeting message", async (ctx) => {
 });
 
 myCommands.command("regexhelp", "Get help with regex syntax", async (ctx) => {
-	await sendEphemeralReply(ctx, getMainHelpMessage(), {
+	await sendEphemeralReply(ctx, getMainHelpMessage(ctx.t), {
 		parse_mode: "MarkdownV2",
 		reply_markup: createCategoryKeyboard(),
 	});
@@ -664,7 +664,7 @@ myCommands.command("language", "Change bot language", async (ctx) => {
 
 myCommands.command("health", "Show bot health status", async (ctx) => {
 	const metrics = getMetrics(workerPool);
-	await ctx.sendMessage(formatHealthStatus(metrics));
+	await ctx.sendMessage(formatHealthStatus(metrics, ctx.t));
 });
 
 myCommands.command("version", "Show bot version", async (ctx) => {
@@ -681,7 +681,7 @@ ${CHANGES ?? "No changes available"}`;
 
 myCommands.command("metrics", "Show performance metrics", async (ctx) => {
 	const metrics = getMetrics(workerPool);
-	await ctx.sendMessage(formatMetrics(metrics));
+	await ctx.sendMessage(formatMetrics(metrics, ctx.t));
 });
 
 // /diff: Show diff for the last sed substitution
@@ -834,12 +834,7 @@ bot.on("callback_query:data", async (ctx) => {
 					.row(
 						InlineKeyboard.text(ctx.t("privacy-delete-apply"), "privacy:apply"),
 					)
-					.row(
-						InlineKeyboard.text(
-							ctx.t("privacy-delete-cancel"),
-							"privacy:cancel",
-						),
-					);
+					.row(InlineKeyboard.text(ctx.t("general-cancel"), "privacy:cancel"));
 				await ctx.editMessageText(ctx.t("privacy-delete-confirmation"), {
 					reply_markup: confirmKeyboard,
 				});
@@ -881,7 +876,7 @@ bot.on("callback_query:data", async (ctx) => {
 	try {
 		if (action === "back") {
 			// Show main help menu
-			await ctx.editMessageText(getMainHelpMessage(), {
+			await ctx.editMessageText(getMainHelpMessage(ctx.t), {
 				parse_mode: "MarkdownV2",
 				reply_markup: createCategoryKeyboard(),
 			});
@@ -895,7 +890,7 @@ bot.on("callback_query:data", async (ctx) => {
 			}
 			await ctx.editMessageText(helpText, {
 				parse_mode: "MarkdownV2",
-				reply_markup: createItemKeyboard(categoryKey),
+				reply_markup: createItemKeyboard(categoryKey, ctx.t),
 			});
 		} else if (action === "item" && parts[2] && parts[3]) {
 			// Show item details
@@ -908,7 +903,7 @@ bot.on("callback_query:data", async (ctx) => {
 			}
 			await ctx.editMessageText(helpText, {
 				parse_mode: "MarkdownV2",
-				reply_markup: createItemKeyboard(categoryKey),
+				reply_markup: createItemKeyboard(categoryKey, ctx.t),
 			});
 		}
 

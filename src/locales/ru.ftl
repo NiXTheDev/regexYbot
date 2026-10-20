@@ -23,7 +23,6 @@ command-privacy = Этот бот не собирает и не обрабаты
 privacy-delete-button = Удалить мои сохранённые данные
 privacy-delete-confirmation = Будут немедленно удалены все сохранённые сообщения и ответы бота этого чата. Это действие необратимо.
 privacy-delete-apply = Да, удалить всё
-privacy-delete-cancel = Отмена
 privacy-delete-done = Все сохранённые данные этого чата удалены.
 privacy-private-only = Это действие доступно только в приватных чатах.
 
@@ -45,7 +44,7 @@ command-language-setError = Недопустимый код языка. Испо
 substitution-result = Результат: { $result }
 substitution-noMatch = Совпадение не найдено.
 substitution-multipleResults = Применено { $count } замен
-substitution-performance = Выполнено { $count } замен за { $time }
+substitution-performance = Замены: { $count } за { $time }
 
 ## Tips
 tip-optimization = Подсказка: { $suggestion }
@@ -70,8 +69,9 @@ health-errorRate = Уровень Ошибок: { $rate }%
 health-uptime = Время Работы: { $uptime }
 
 metrics-title = Метрики Производительности
-metrics-cacheHitRate = Уровень Попаданий в Кэш: { $rate }%
-metrics-avgProcessingTime = Среднее Время Обработки: { $time }ms
+metrics-cacheHitRate = Кэш: { $cached }/{ $max } ({ $rate }% попаданий, { $misses } промахов)
+metrics-avgProcessingTime = Среднее Время Ожидания: { $time }ms
+metrics-maxQueueWait = Максимальное Время Ожидания: { $time }ms
 metrics-totalSubstitutions = Всего Замен: { $count }
 metrics-regexCompilations = Компиляции Regex: { $total } (в кэше: { $cached })
 

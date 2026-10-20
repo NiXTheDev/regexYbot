@@ -23,7 +23,6 @@ command-privacy = 除了用于执行正则表达式替换的短消息历史记�
 privacy-delete-button = 删除我的已存数据
 privacy-delete-confirmation = 这将立即删除此聊天中所有已存的消息和机器人回复，且无法撤销。
 privacy-delete-apply = 是的，全部删除
-privacy-delete-cancel = 取消
 privacy-delete-done = 已删除此聊天的所有已存数据。
 privacy-private-only = 此操作仅在私聊中可用。
 
@@ -45,7 +44,7 @@ command-language-setError = 无效的语言代码。使用 /language list 查看
 substitution-result = 结果：{ $result }
 substitution-noMatch = 未找到匹配。
 substitution-multipleResults = 应用了 { $count } 次替换
-substitution-performance = 在 { $time } 内执行了 { $count } 次替换
+substitution-performance = 替换次数：{ $count }（{ $time }）
 
 ## Tips
 tip-optimization = 提示：{ $suggestion }
@@ -70,8 +69,9 @@ health-errorRate = 错误率：{ $rate }%
 health-uptime = 运行时间：{ $uptime }
 
 metrics-title = 性能指标
-metrics-cacheHitRate = 缓存命中率：{ $rate }%
-metrics-avgProcessingTime = 平均处理时间：{ $time }ms
+metrics-cacheHitRate = 缓存：{ $cached }/{ $max }（命中率 { $rate }%，未命中 { $misses } 次）
+metrics-avgProcessingTime = 平均等待时间：{ $time }ms
+metrics-maxQueueWait = 最大等待时间：{ $time }ms
 metrics-totalSubstitutions = 总替换次数：{ $count }
 metrics-regexCompilations = 正则表达式编译次数：{ $total }（已缓存：{ $cached }）
 

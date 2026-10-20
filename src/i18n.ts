@@ -24,6 +24,16 @@ export type MyContext = HydrateFlavor<
 >;
 
 /**
+ * A translation function already bound to a locale, for modules that
+ * need localized chrome (metrics formatters, help text, tips) without
+ * carrying a full Telegram context around.
+ */
+export type Translator = (
+	key: string,
+	args?: Record<string, string | number>,
+) => string;
+
+/**
  * Available language codes
  */
 export type LanguageCode =

@@ -374,6 +374,7 @@ describe("SedHandler performance message tracking", () => {
 		const ctx = {
 			chat: { id: 123, type: "group" },
 			from: { id: 456 },
+			t: (key: string) => key,
 			sendMessage: async () => ({ message_id: ++nextMessageId }),
 			api: {
 				sendMessage: async () => ({ message_id: 1 }),

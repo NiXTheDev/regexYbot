@@ -6,6 +6,7 @@
  */
 
 import { Logger } from "./logger";
+import type { Translator } from "./i18n";
 
 const _logger = new Logger("OptimizationTips");
 
@@ -250,6 +251,38 @@ export function hasSignificantImprovement(
 }
 
 /**
+ * Tip kinds with a dedicated translation key, keyed by their `pattern`
+ * marker; every other kind keeps the original formatted English block
+ * (no behavior-changing rewording without a keyed variant).
+ */
+const KEYED_TIP_PATTERNS = new Set(["[0-9]", "[a-zA-Z0-9_]", "[ \\t]"]);
+
+/**
+ * Render a tip message through the given translator.
+ *
+ * @param tip - The tip to render
+ * @param t - Translator bound to the requester's locale
+ * @returns Localized tip text
+ */
+function renderTipMessage(tip: OptimizationTip, t: Translator): string {
+	if (tip.pattern === ".*") {
+		return t("tip-greedy");
+	}
+	if (tip.pattern === "multiple ( ) groups") {
+		return t("tip-nonCapturing");
+	}
+	if (KEYED_TIP_PATTERNS.has(tip.pattern)) {
+		// The per-kind keys phrase this as "use X instead of Y" where X is
+		// the suggested shorthand and Y the spelled-out class.
+		return t("tip-useShorthand", {
+			shorthand: tip.suggestion,
+			longform: tip.pattern,
+		});
+	}
+	return formatTip(tip);
+}
+
+/**
  * How long an ephemeral tip stays visible before it deletes itself
  */
 export const TIP_LIFETIME_MS = 10_000;
@@ -271,11 +304,14 @@ export async function sendTransientTip(
 		};
 		chat?: { id: number; type?: string };
 		from?: { id: number };
+		t?: Translator;
 	},
 	tip: OptimizationTip,
 	lifetimeMs: number = TIP_LIFETIME_MS,
 ): Promise<void> {
-	const formattedTip = formatTip(tip);
+	// Translator-bearing contexts get the keyed rendering above;
+	// translator-less contexts (tests, mocks) keep the plain format.
+	const formattedTip = ctx.t ? renderTipMessage(tip, ctx.t) : formatTip(tip);
 
 	try {
 		if (ctx.chat?.id && ctx.from?.id) {

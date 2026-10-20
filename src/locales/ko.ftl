@@ -23,7 +23,6 @@ command-privacy = 이 봇은 정규식 대체를 수행하기 위한 짧은 메�
 privacy-delete-button = 저장된 내 데이터 삭제
 privacy-delete-confirmation = 이 채팅의 저장된 모든 메시지와 봇의 답장을 지금 즉시 삭제합니다. 이 작업은 되돌릴 수 없습니다.
 privacy-delete-apply = 네, 모두 삭제
-privacy-delete-cancel = 취소
 privacy-delete-done = 이 채팅의 저장된 데이터를 모두 삭제했습니다.
 privacy-private-only = 이 작업은 개인 채팅에서만 사용할 수 있습니다.
 
@@ -45,7 +44,7 @@ command-language-setError = 잘못된 언어 코드입니다. 사용 가능한 �
 substitution-result = 결과: { $result }
 substitution-noMatch = 일치하는 항목을 찾을 수 없습니다.
 substitution-multipleResults = { $count }개의 대체 적용
-substitution-performance = { $time }에 { $count }개의 대체 실행
+substitution-performance = 치환: { $count }회 ({ $time })
 
 ## Tips
 tip-optimization = 팁: { $suggestion }
@@ -70,8 +69,9 @@ health-errorRate = 오류율: { $rate }%
 health-uptime = 가동 시간: { $uptime }
 
 metrics-title = 성능 지표
-metrics-cacheHitRate = 캐시 적중률: { $rate }%
-metrics-avgProcessingTime = 평균 처리 시간: { $time }ms
+metrics-cacheHitRate = 캐시: { $cached }/{ $max } (적중률 { $rate }%, 실패 { $misses }회)
+metrics-avgProcessingTime = 평균 대기 시간: { $time }ms
+metrics-maxQueueWait = 최대 대기 시간: { $time }ms
 metrics-totalSubstitutions = 총 대체 횟수: { $count }
 metrics-regexCompilations = 정규식 컴파일 수: { $total } (캐시됨: { $cached })
 

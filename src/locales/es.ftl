@@ -23,7 +23,6 @@ command-privacy = Este bot no recopila ni procesa datos de usuario, aparte de un
 privacy-delete-button = Eliminar mis datos guardados
 privacy-delete-confirmation = Esto elimina ahora mismo todos los mensajes guardados y las respuestas del bot de este chat. No se puede deshacer.
 privacy-delete-apply = Sí, borrar todo
-privacy-delete-cancel = Cancelar
 privacy-delete-done = Se han borrado todos los datos guardados de este chat.
 privacy-private-only = Esta acción solo está disponible en chats privados.
 
@@ -45,7 +44,7 @@ command-language-setError = Código de idioma inválido. Usa /language list para
 substitution-result = Resultado: { $result }
 substitution-noMatch = No se encontró coincidencia.
 substitution-multipleResults = Aplicadas { $count } sustituciones
-substitution-performance = Realizadas { $count } sustituciones en { $time }
+substitution-performance = Sustituciones: { $count } en { $time }
 
 ## Tips
 tip-optimization = Consejo: { $suggestion }
@@ -70,8 +69,9 @@ health-errorRate = Tasa de Error: { $rate }%
 health-uptime = Tiempo de Actividad: { $uptime }
 
 metrics-title = Métricas de Rendimiento
-metrics-cacheHitRate = Tasa de Acierto de Caché: { $rate }%
-metrics-avgProcessingTime = Tiempo Promedio de Procesamiento: { $time }ms
+metrics-cacheHitRate = Caché: { $cached }/{ $max } ({ $rate }% de aciertos, { $misses } fallos)
+metrics-avgProcessingTime = Espera Media en Cola: { $time }ms
+metrics-maxQueueWait = Espera Máxima en Cola: { $time }ms
 metrics-totalSubstitutions = Sustituciones Totales: { $count }
 metrics-regexCompilations = Compilaciones Regex: { $total } (en caché: { $cached })
 

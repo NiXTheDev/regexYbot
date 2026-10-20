@@ -23,7 +23,6 @@ command-privacy = Ten bot nie zbiera ani nie przetwarza danych użytkowników, p
 privacy-delete-button = Usuń moje zapisane dane
 privacy-delete-confirmation = Spowoduje to natychmiastowe usunięcie wszystkich zapisanych wiadomości i odpowiedzi bota z tego czatu. Tej operacji nie można cofnąć.
 privacy-delete-apply = Tak, usuń wszystko
-privacy-delete-cancel = Anuluj
 privacy-delete-done = Wszystkie zapisane dane tego czatu zostały usunięte.
 privacy-private-only = Ta akcja jest dostępna tylko na czatach prywatnych.
 
@@ -45,7 +44,7 @@ command-language-setError = Nieprawidłowy kod języka. Użyj /language list, ab
 substitution-result = Wynik: { $result }
 substitution-noMatch = Nie znaleziono dopasowania.
 substitution-multipleResults = Zastosowano { $count } podstawień
-substitution-performance = Wykonano { $count } podstawień w { $time }
+substitution-performance = Podstawienia: { $count } w { $time }
 
 ## Tips
 tip-optimization = Wskazówka: { $suggestion }
@@ -70,8 +69,9 @@ health-errorRate = Wskaźnik Błędów: { $rate }%
 health-uptime = Czas Działania: { $uptime }
 
 metrics-title = Metryki Wydajności
-metrics-cacheHitRate = Wskaźnik Trafień Cache: { $rate }%
-metrics-avgProcessingTime = Średni Czas Przetwarzania: { $time }ms
+metrics-cacheHitRate = Cache: { $cached }/{ $max } ({ $rate }% trafień, { $misses } pomyłek)
+metrics-avgProcessingTime = Średni Czas Oczekiwania: { $time }ms
+metrics-maxQueueWait = Maksymalny Czas Oczekiwania: { $time }ms
 metrics-totalSubstitutions = Całkowita Liczba Podstawień: { $count }
 metrics-regexCompilations = Kompilacje Regex: { $total } (w cache: { $cached })
 

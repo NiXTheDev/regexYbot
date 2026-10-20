@@ -23,7 +23,6 @@ command-privacy = Denna bot samlar inte in eller bearbetar några användardata,
 privacy-delete-button = Ta bort min sparade data
 privacy-delete-confirmation = Detta raderar omedelbart alla sparade meddelanden och botsvar i den här chatten. Det går inte att ångra.
 privacy-delete-apply = Ja, radera allt
-privacy-delete-cancel = Avbryt
 privacy-delete-done = All sparad data för den här chatten har raderats.
 privacy-private-only = Denna åtgärd är endast tillgänglig i privata chattar.
 
@@ -45,7 +44,7 @@ command-language-setError = Ogiltig språkkod. Använd /language list för att s
 substitution-result = Resultat: { $result }
 substitution-noMatch = Ingen matchning hittades.
 substitution-multipleResults = Tillämpade { $count } ersättningar
-substitution-performance = Utförde { $count } ersättningar på { $time }
+substitution-performance = Ersättningar: { $count } på { $time }
 
 ## Tips
 tip-optimization = Tips: { $suggestion }
@@ -70,8 +69,9 @@ health-errorRate = Felfrekvens: { $rate }%
 health-uptime = Drifttid: { $uptime }
 
 metrics-title = Prestandamått
-metrics-cacheHitRate = Cache-träffsats: { $rate }%
-metrics-avgProcessingTime = Genomsnittlig Bearbetningstid: { $time }ms
+metrics-cacheHitRate = Cache: { $cached }/{ $max } ({ $rate }% träffar, { $misses } missar)
+metrics-avgProcessingTime = Genomsnittlig Väntetid: { $time }ms
+metrics-maxQueueWait = Maximal Väntetid: { $time }ms
 metrics-totalSubstitutions = Totala Ersättningar: { $count }
 metrics-regexCompilations = Regex-kompileringar: { $total } (i cache: { $cached })
 
