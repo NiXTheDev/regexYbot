@@ -259,8 +259,6 @@ jobs:
             RELEASED_AT=${{ steps.version.outputs.released_at }}
             CHANGES=${{ steps.version.outputs.changes }}
           cache-from: |
-            type=registry,ref=hangar.nixthedev.ru/${{ steps.repo.outputs.name }}:buildcache
             type=gha,url=https://acc.nixthedev.ru,token=${{ secrets.CACHETTE_BUILDX_JWT }}
-          cache-to: |
-            type=registry,ref=hangar.nixthedev.ru/${{ steps.repo.outputs.name }}:buildcache,mode=max
-            type=gha,url=https://acc.nixthedev.ru,token=${{ secrets.CACHETTE_BUILDX_JWT }},mode=max,ignore-error=true
+            type=registry,ref=hangar.nixthedev.ru/${{ steps.repo.outputs.name }}:buildcache
+          cache-to: type=gha,url=https://acc.nixthedev.ru,token=${{ secrets.CACHETTE_BUILDX_JWT }},mode=max,ignore-error=true
