@@ -32,6 +32,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Cache bun install cache (cachette-backed)
+        uses: https://hangar.nixthedev.ru/actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: regexybot-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: regexybot-bun-
+
       - name: Install dependencies
         run: |
           apt-get update && apt-get install -y jq curl zip

@@ -13,6 +13,13 @@ jobs:
       - name: Checkout code
         uses: https://hangar.nixthedev.ru/actions/checkout@v4
 
+      - name: Cache bun install cache (cachette-backed)
+        uses: https://hangar.nixthedev.ru/actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: regexybot-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: regexybot-bun-
+
       - name: Install dependencies
         run: bun install -d --frozen-lockfile
 
@@ -27,6 +34,13 @@ jobs:
       - name: Checkout code
         uses: https://hangar.nixthedev.ru/actions/checkout@v4
 
+      - name: Cache bun install cache (cachette-backed)
+        uses: https://hangar.nixthedev.ru/actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: regexybot-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: regexybot-bun-
+
       - name: Install dependencies
         run: bun install -d --frozen-lockfile
 
@@ -40,6 +54,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: https://hangar.nixthedev.ru/actions/checkout@v4
+
+      - name: Cache bun install cache (cachette-backed)
+        uses: https://hangar.nixthedev.ru/actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: regexybot-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: regexybot-bun-
 
       - name: Install dependencies
         run: bun install -d --frozen-lockfile
@@ -56,6 +77,13 @@ jobs:
       - name: Checkout code
         uses: https://hangar.nixthedev.ru/actions/checkout@v4
 
+      - name: Cache bun install cache (cachette-backed)
+        uses: https://hangar.nixthedev.ru/actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: regexybot-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: regexybot-bun-
+
       - name: Install dependencies
         run: bun install -d --frozen-lockfile
 
@@ -70,8 +98,18 @@ jobs:
       - name: Checkout code
         uses: https://hangar.nixthedev.ru/actions/checkout@v4
 
+      - name: Cache the pinned docker CLI (cachette-backed)
+        uses: https://hangar.nixthedev.ru/actions/cache@v4
+        with:
+          path: /usr/local/bin/docker
+          key: regexybot-docker-cli-28.0.4-linux-amd64
+
       - name: Install Docker CLI
         run: |
+          if docker --version 2>/dev/null | grep -q '28.0.4'; then
+            echo "docker CLI already present (cache hit): $(docker --version)"
+            exit 0
+          fi
           curl -fsSL "https://download.docker.com/linux/static/stable/$(uname -m)/docker-28.0.4.tgz" | tar xz -C /usr/local/bin --strip-components=1 docker/docker
 
       - name: Set up QEMU

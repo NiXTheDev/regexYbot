@@ -14,6 +14,13 @@ jobs:
       - name: Checkout code
         uses: https://hangar.nixthedev.ru/actions/checkout@v4
 
+      - name: Cache bun install cache (cachette-backed)
+        uses: https://hangar.nixthedev.ru/actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: regexybot-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: regexybot-bun-
+
       - name: Run security audit
         id: audit
         continue-on-error: true
