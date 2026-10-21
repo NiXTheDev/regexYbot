@@ -24,12 +24,12 @@
 		"generate": "bun run src/version.ts",
 		"build-win": "bun build --compile src/index.ts --windows-title=regexYbot --windows-description=\"regexbot, but better\" --windows-version=$(bun run src/version.ts version)",
 		"build-linux": "bun build --compile src/index.ts",
-		"typecheck": "bun --bun tsc --noEmit",
+		"typecheck": "echo 'Use `bun check` instead!' && exit 1",
 		"lint": "bunx eslint .",
 		"fmt": "bunx prettier --write .",
 		"fmt:check": "bunx prettier --check .",
 		"fmt:commit": "bunx prettier --write . && git add -A && git commit --no-verify -m \"chore(fmt): code formatting\"",
-		"ltf": "bun fmt && bun lint && bun typecheck && bun test --retry=5 --only-failures --parallel",
-		"ltf:check": "bun run lint && bun run typecheck && bun run fmt:check && bun test --retry=5 --only-failures --parallel"
+		"ltf": "bun fmt && bun lint && bun check && bun test --retry=5 --only-failures --parallel",
+		"ltf:check": "bun run lint && bun check && bun run fmt:check && bun test --retry=5 --only-failures --parallel"
 	}
 }

@@ -36,7 +36,7 @@ git diff-index --check --cached $against -- || exit 1
 # (no --retry) test run so a real failure still blocks the commit
 # instead of being retried away.
 bun run fmt:check
-bun run typecheck
+bun check
 bun run lint
 bun test
 

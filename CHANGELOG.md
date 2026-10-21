@@ -66,9 +66,10 @@ All notable changes to this project will be documented in this file.
   (Docker's default grace period is 10s).
 - Stale module exports that no caller referenced were removed.
 - The pre-commit hook now delegates to the package scripts (`fmt:check`,
-  `typecheck`, `lint`) instead of inlining them, keeping the gate
-  consistent with `bun run ltf:check`; the plain (no `--retry`) `bun test`
-  in the hook is deliberate.
+  `lint`) instead of inlining them and types via bun 1.4.3's native
+  `bun check` (the legacy `typecheck` script is a loud redirect), keeping
+  the gate consistent with `bun run ltf:check`; the plain (no `--retry`)
+  `bun test` in the hook is deliberate.
 - Docs pass: README gained the full command list and corrected run
   instructions (`bun run main` / `bun run dev`), an accurate dynamic
   worker-pool bullet, the `src/locales/` path, and real graceful-shutdown
