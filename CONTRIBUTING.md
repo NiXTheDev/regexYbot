@@ -386,7 +386,7 @@ bun ltf
 # If any step fails, fix before PR:
 bun fmt      # Format code
 bun lint     # Check for issues
-bun check # TypeScript check
+bun check    # TypeScript check
 bun test     # Run tests
 ```
 

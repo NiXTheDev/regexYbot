@@ -32,7 +32,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Cache bun install cache (cachette-backed)
+      - name: Cache bun install cache
         uses: https://hangar.nixthedev.ru/actions/cache@v4
         with:
           path: ~/.bun/install/cache
