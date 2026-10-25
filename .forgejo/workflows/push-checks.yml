@@ -8,7 +8,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    container: oven/bun:1.4.3
+    container: oven/bun:1.4.4
     steps:
       - name: Checkout code
         uses: https://hangar.nixthedev.ru/actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
   format:
     name: Format Check
     runs-on: ubuntu-latest
-    container: oven/bun:1.4.3
+    container: oven/bun:1.4.4
     steps:
       - name: Checkout code
         uses: https://hangar.nixthedev.ru/actions/checkout@v4
@@ -50,7 +50,7 @@ jobs:
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
-    container: oven/bun:1.4.3
+    container: oven/bun:1.4.4
     steps:
       - name: Checkout code
         uses: https://hangar.nixthedev.ru/actions/checkout@v4
@@ -71,7 +71,7 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
-    container: oven/bun:1.4.3
+    container: oven/bun:1.4.4
     needs: [lint, format, typecheck]
     steps:
       - name: Checkout code
@@ -102,8 +102,8 @@ jobs:
         uses: https://hangar.nixthedev.ru/actions/cache@v4
         with:
           path: ~/.bun
-          key: regexybot-bun-1.4.3-${{ hashFiles('bun.lock') }}
-          restore-keys: regexybot-bun-1.4.3-
+          key: regexybot-bun-1.4.4-${{ hashFiles('bun.lock') }}
+          restore-keys: regexybot-bun-1.4.4-
 
       - name: Install Bun (cache-backed)
         run: |
