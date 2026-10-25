@@ -313,9 +313,14 @@ export class SedHandler {
 						const isGroupChat =
 							ctx.chat?.type === "group" || ctx.chat?.type === "supergroup";
 						try {
+							// Bot API 10 privacy: receiver_user_id is only valid in
+							// group/supergroup chats; spread keeps the key out of
+							// private replies entirely.
 							await ctx.reply(escapeMarkdownV2(warning), {
 								parse_mode: "MarkdownV2",
-								receiver_user_id: isGroupChat ? ctx.from?.id : undefined,
+								...(isGroupChat && ctx.from
+									? { receiver_user_id: ctx.from.id }
+									: {}),
 							});
 						} catch (error: unknown) {
 							this.logger.error(

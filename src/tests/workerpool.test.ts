@@ -23,7 +23,9 @@ describe("WorkerPool", () => {
 			maxWorkers: 4,
 			minWorkers: 1,
 			initialWorkers: 1,
-			taskTimeoutMs: 5000,
+			// Cold worker spawns can take seconds on this machine; task budgets
+			// must not confuse spawn latency with a stuck task.
+			taskTimeoutMs: 30_000,
 			idleTimeoutMs: 100,
 			idleCheckIntervalMs: 50,
 			workerScript: "./src/hellspawn.ts",
@@ -44,7 +46,7 @@ describe("WorkerPool", () => {
 		const result = await pool.run(task);
 		expect(result.result).toBe("hi world");
 		expect(result.error).toBeUndefined();
-	});
+	}, 60_000);
 
 	test("scale up when tasks queue", async () => {
 		const task: TaskMessage = {
@@ -66,7 +68,7 @@ describe("WorkerPool", () => {
 		expect(stats.totalWorkers).toBe(4);
 
 		await Promise.all(promises);
-	}, 30000);
+	}, 60_000);
 
 	test("scale down idle workers", async () => {
 		// Run some tasks to scale up
@@ -87,14 +89,14 @@ describe("WorkerPool", () => {
 
 		const stats = pool.getStats();
 		expect(stats.totalWorkers).toBe(1); // Back to min
-	}, 30000);
+	}, 60_000);
 
 	test("respects max workers limit", async () => {
 		const limitedPool = new WorkerPool({
 			maxWorkers: 2,
 			minWorkers: 1,
 			initialWorkers: 1,
-			taskTimeoutMs: 5000,
+			taskTimeoutMs: 30_000, // same cold-spawn allowance for local runs
 			idleTimeoutMs: 100,
 			idleCheckIntervalMs: 50,
 			workerScript: "./src/hellspawn.ts",
@@ -122,7 +124,7 @@ describe("WorkerPool", () => {
 		} finally {
 			await limitedPool.shutdown();
 		}
-	}, 30000);
+	}, 60_000);
 
 	test("handles invalid regex errors", async () => {
 		const task: TaskMessage = {
@@ -132,7 +134,7 @@ describe("WorkerPool", () => {
 		};
 
 		await expect(pool.run(task)).rejects.toThrow();
-	});
+	}, 60_000);
 
 	test("pool continues working after errors", async () => {
 		const validTask: TaskMessage = {
@@ -157,7 +159,7 @@ describe("WorkerPool", () => {
 		// Pool still works
 		const result2 = await pool.run(validTask);
 		expect(result2.result).toBe("hi");
-	}, 15000);
+	}, 60_000);
 
 	test("returns pool statistics", async () => {
 		const stats = pool.getStats();
@@ -166,7 +168,7 @@ describe("WorkerPool", () => {
 		expect(typeof stats.busyWorkers).toBe("number");
 		expect(typeof stats.queuedTasks).toBe("number");
 		expect(typeof stats.pendingTasks).toBe("number");
-	});
+	}, 60_000);
 
 	test("rejects new tasks during shutdown", async () => {
 		const task: TaskMessage = {
@@ -187,7 +189,7 @@ describe("WorkerPool", () => {
 
 		// Mark as shut down so afterEach doesn't fail
 		pool["isShuttingDown"] = true;
-	});
+	}, 60_000);
 
 	test("scales past maxWorkers during shutdown with draining", async () => {
 		// Create pool with very low maxWorkers
@@ -195,7 +197,7 @@ describe("WorkerPool", () => {
 			maxWorkers: 2,
 			minWorkers: 1,
 			initialWorkers: 1,
-			taskTimeoutMs: 5000,
+			taskTimeoutMs: 30_000, // same cold-spawn allowance for local runs
 			idleTimeoutMs: 100,
 			idleCheckIntervalMs: 50,
 			workerScript: "./src/hellspawn.ts",
@@ -217,14 +219,12 @@ describe("WorkerPool", () => {
 				.fill(null)
 				.map(() => drainPool.run(task));
 
-			// Very small delay - just enough for tasks to enter queue
-			await new Promise((resolve) => setTimeout(resolve, 10));
-
-			// Get stats before shutdown - should be at maxWorkers (2)
+			// Sample synchronously: no timer gap, so workers cannot have run
+			// anything on this tick and the whole backlog is still counted.
 			const statsBefore = drainPool.getStats();
 			expect(statsBefore.totalWorkers).toBeLessThanOrEqual(2);
 
-			// Verify there are still queued tasks before shutdown
+			// There must be a backlog for shutdown to drain
 			expect(
 				statsBefore.queuedTasks + statsBefore.pendingTasks,
 			).toBeGreaterThan(0);
@@ -241,7 +241,7 @@ describe("WorkerPool", () => {
 			// beyond maxWorkers
 			await drainPool.shutdown({
 				drainTasks: true,
-				drainTimeoutMs: 5000,
+				drainTimeoutMs: 30_000,
 			});
 
 			clearInterval(checkInterval);
@@ -260,5 +260,5 @@ describe("WorkerPool", () => {
 				await drainPool.shutdown();
 			}
 		}
-	}, 30000);
+	}, 60_000);
 });

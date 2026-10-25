@@ -5,6 +5,8 @@
  * Tips auto-delete after 10 seconds to avoid clutter
  */
 
+import type { RawApi } from "grammy";
+
 import { Logger } from "./logger";
 
 const _logger = new Logger("OptimizationTips");
@@ -241,6 +243,16 @@ export function hasSignificantImprovement(pattern: string): boolean {
 }
 
 /**
+ * grammy's own sendMessage extras, widened with the Bot API 10 privacy field
+ * `receiver_user_id` — stable `@grammyjs/types` 5.0.0 does not declare the
+ * field yet, so it is typed here locally instead of patching the dependency.
+ */
+type SendMessageWithReceiverExtras = Omit<
+	Parameters<RawApi["sendMessage"]>[0],
+	"text" | "chat_id"
+> & { receiver_user_id?: number };
+
+/**
  * Send an ephemeral optimization tip
  * Uses receiver_user_id for privacy — only the sender sees it
  */
@@ -250,7 +262,7 @@ export async function sendTransientTip(
 			sendMessage: (
 				chatId: number,
 				text: string,
-				options?: { receiver_user_id?: number },
+				options?: SendMessageWithReceiverExtras,
 			) => Promise<{ message_id: number }>;
 		};
 		chat?: { id: number; type?: string };

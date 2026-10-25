@@ -190,8 +190,7 @@ function resolveFromVersionJson(): VersionInfo | null {
 			return {
 				version: parsed.version,
 				commit: parsed.commit,
-				releasedAt:
-					parsed.releasedAt ?? new Date().toISOString().split("T")[0],
+				releasedAt: parsed.releasedAt ?? new Date().toISOString().split("T")[0],
 				changes: parsed.changes ?? null,
 			};
 		}

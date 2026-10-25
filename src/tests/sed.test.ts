@@ -334,7 +334,13 @@ describe("SedHandler dangerous pattern warning", () => {
 				throw new Error("403: bot can't initiate conversation with a user");
 			});
 		await expect(
-			handler.handleSedCommand(ctx, [dangerousCommand], "original text", 42, false),
+			handler.handleSedCommand(
+				ctx,
+				[dangerousCommand],
+				"original text",
+				42,
+				false,
+			),
 		).resolves.toBeUndefined();
 		expect(replyCalls).toHaveLength(1);
 		expect(runTracker.count).toBe(1);

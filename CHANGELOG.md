@@ -3,14 +3,23 @@
 All notable changes to this project will be documented in this file.
 
 <details open>
-<summary><b>[0.2.2.2] - 2026-08-11</b></summary>
+<summary><b>[0.2.2.2] - 2026-10-25</b></summary>
 
 ### Bug Fixes
 
 - Fixed Telegram 403 errors: `receiver_user_id` is now only sent in group/supergroup chats for dangerous-pattern warnings (`src/sed.ts`) and optimization tips (`src/optimizationTips.ts`), with a graceful fallback so sed still executes if the warning fails to send
 - Deduplicated CI version detection: `push-checks.yml` now parses `.version.json` instead of duplicating version detection logic
 - Fixed self-build version reporting: `.version.json` is baked at Docker build time and a new `resolveFromVersionJson()` tier was added, so self-builders get the correct version/commit instead of `0000000`
-- Removed dead dependencies: `@grammyjs/hydrate`, `@grammyjs/ratelimiter`, and `minimatch`
+- Removed dead dependencies: `@grammyjs/ratelimiter` and `minimatch`; `@grammyjs/hydrate` restored and wired as middleware again
+
+### grammY Upgrade
+
+- Upgraded grammY from v1.45.1 to v1.46.0 — pulls `@grammyjs/types` 4.0.0 → 5.0.0
+- Dev-dependency floors refreshed via `bun update`: prettier ^3.9.10, typescript-eslint ^8.72.0
+
+### Types
+
+- Bot API 10.x `receiver_user_id` typed against stable `@grammyjs/types` 5.0.0 (which predates the field): the guarded group-chat warning replies send extras via conditional spread and `sendTransientTip`'s structural `api.sendMessage` slot derives grammy's own `sendMessage` extras and widens them with the field — no casts, no dependency patching
 
 </details>
 
